@@ -87,6 +87,13 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
     onUpdateDate(newDate);
   };
 
+  // Jump to specific astronomical season (preserving time of day)
+  const handleJumpToSeason = (monthIndex: number, day: number) => {
+    const newDate = new Date(currentDate);
+    newDate.setUTCMonth(monthIndex, day);
+    onUpdateDate(newDate);
+  };
+
   // Filter cities by search
   const filteredCities = cities.filter(
     (c) =>
@@ -379,6 +386,44 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
                   </div>
                 </div>
 
+                {/* Seasonal Solstices & Equinoxes Milestones Bar */}
+                <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-1.5 text-slate-400 font-medium">
+                    <span className="text-amber-400">🍂</span>
+                    <span className="text-[11px] uppercase tracking-wider font-semibold">Seasonal Paths:</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                    <button
+                      onClick={() => handleJumpToSeason(2, 20)}
+                      className="px-2 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 font-medium transition-colors cursor-pointer flex items-center gap-1"
+                      title="Jump simulation date to Spring Equinox (March 20, δ=0°)"
+                    >
+                      <span>🌿</span> Mar 20 (Equinox)
+                    </button>
+                    <button
+                      onClick={() => handleJumpToSeason(5, 21)}
+                      className="px-2 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-medium transition-colors cursor-pointer flex items-center gap-1"
+                      title="Jump simulation date to Summer Solstice (June 21, δ=+23.44°)"
+                    >
+                      <span>☀️</span> Jun 21 (Summer)
+                    </button>
+                    <button
+                      onClick={() => handleJumpToSeason(8, 22)}
+                      className="px-2 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 font-medium transition-colors cursor-pointer flex items-center gap-1"
+                      title="Jump simulation date to Autumn Equinox (September 22, δ=0°)"
+                    >
+                      <span>🍁</span> Sep 22 (Equinox)
+                    </button>
+                    <button
+                      onClick={() => handleJumpToSeason(11, 21)}
+                      className="px-2 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-300 font-medium transition-colors cursor-pointer flex items-center gap-1"
+                      title="Jump simulation date to Winter Solstice (December 21, δ=-23.44°)"
+                    >
+                      <span>❄️</span> Dec 21 (Winter)
+                    </button>
+                  </div>
+                </div>
+
                 {/* Lunar Ephemeris Strip */}
                 <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-2.5">
@@ -470,7 +515,17 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
                     onChange={(e) => onUpdateLayers({ showSunTrajectory: e.target.checked })}
                     className="accent-amber-400 rounded"
                   />
-                  <span className="font-semibold">☀️ Sun Sky Trajectory Arc</span>
+                  <span className="font-semibold">☀️ Today's Sun Path Arc</span>
+                </label>
+
+                <label className="flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 p-2 rounded-xl border border-emerald-500/40 text-emerald-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={layers.showSeasonalPaths}
+                    onChange={(e) => onUpdateLayers({ showSeasonalPaths: e.target.checked })}
+                    className="accent-emerald-400 rounded"
+                  />
+                  <span className="font-semibold">🌿 Solstices &amp; Equinoxes</span>
                 </label>
 
                 <label className="flex items-center gap-2 bg-slate-800/50 hover:bg-slate-800 p-2 rounded-xl border border-slate-700/50 cursor-pointer">

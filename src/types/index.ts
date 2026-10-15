@@ -64,6 +64,7 @@ export interface GlobeLayerSettings {
   showGraticule: boolean;
   showSunRays: boolean;
   showSunTrajectory: boolean;
+  showSeasonalPaths: boolean;
   cloudOpacity: number;
   rotationSpeed: number; // auto-rotation when not playing
   autoRotate: boolean;
