@@ -28,6 +28,7 @@ export default function App() {
     showTwilightBands: true,
     showSubsolarPoint: true,
     showSunTrajectory: true,
+    showSeasonalPaths: true,
     showCities: true,
     showGraticule: true,
     showSunRays: true,
@@ -120,8 +121,10 @@ export default function App() {
           cities={WORLD_CITIES}
           selectedCity={selectedCity}
           onSelectCity={handleSelectCity}
+          onSelectDate={setCurrentDate}
           onOpenDetails={() => setIsCityModalOpen(true)}
           layers={layers}
+          onUpdateLayers={updateLayers}
           activeCameraPreset={activeCameraPreset}
           onResetCameraPreset={() => setActiveCameraPreset(null)}
         />
