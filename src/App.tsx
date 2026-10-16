@@ -7,38 +7,49 @@ import { Daylight2DMap } from './components/Daylight2DMap';
 import { SolarHUD } from './components/SolarHUD';
 import { DaylightAnalytics } from './components/DaylightAnalytics';
 import { CityInspectorModal } from './components/CityInspectorModal';
+import { DaylightCalendar } from './components/DaylightCalendar';
+import { ShareViewDialog } from './components/ShareViewDialog';
+import { createShareUrl, DEFAULT_LAYERS, readSharedView } from './utils/viewState';
 
 export default function App() {
-  const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
+  const [initialView] = useState(() => readSharedView(window.location.hash));
+  const [currentDate, setCurrentDate] = useState<Date>(() => initialView?.date ?? new Date());
+  const [followLive, setFollowLive] = useState(!initialView);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(300); // 5 min/sec by default for visible movement
-  const [viewMode, setViewMode] = useState<ViewMode>('3d-globe');
+  const [viewMode, setViewMode] = useState<ViewMode>(initialView?.view ?? '3d-globe');
   // Default to London (or first city) so the 3D sun trajectory sky dome is immediately visible!
-  const [selectedCity, setSelectedCity] = useState<CityData | null>(() => WORLD_CITIES[6]);
+  const [selectedCity, setSelectedCity] = useState<CityData | null>(() => initialView ? initialView.city : WORLD_CITIES[6]);
   const [isCityModalOpen, setIsCityModalOpen] = useState<boolean>(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState<boolean>(false);
   const [activeCameraPreset, setActiveCameraPreset] = useState<string | null>('focus-trajectory');
 
   // Globe Layers configuration
-  const [layers, setLayers] = useState<GlobeLayerSettings>({
-    showAtmosphere: true,
-    showClouds: true,
-    showNightLights: true,
-    showTerminator: true,
-    showTwilightBands: true,
-    showSubsolarPoint: true,
-    showSunTrajectory: true,
-    showSeasonalPaths: true,
-    showCities: true,
-    showGraticule: true,
-    showSunRays: true,
-    cloudOpacity: 1.0,
-    rotationSpeed: 0.5,
-    autoRotate: false,
-  });
+  const [layers, setLayers] = useState<GlobeLayerSettings>(() => initialView?.layers ?? { ...DEFAULT_LAYERS });
 
   const updateLayers = useCallback((partial: Partial<GlobeLayerSettings>) => {
     setLayers((prev) => ({ ...prev, ...partial }));
+  }, []);
+
+  // Follow shared links even when navigation only changes the URL fragment.
+  useEffect(() => {
+    const restore = () => {
+      const state = readSharedView(window.location.hash);
+      if (!state) return;
+      setCurrentDate(state.date);
+      setSelectedCity(state.city);
+      setViewMode(state.view);
+      setLayers(state.layers);
+      setFollowLive(false);
+      setIsPlaying(false);
+      setActiveCameraPreset(state.city ? 'focus-city' : null);
+      setIsCalendarOpen(false);
+      setShareUrl(null);
+    };
+    window.addEventListener('hashchange', restore);
+    return () => window.removeEventListener('hashchange', restore);
   }, []);
 
   // Compute Subsolar Point in real-time
@@ -67,7 +78,7 @@ export default function App() {
 
   // Real-time ticking when not playing (updates every 10 seconds to keep live accurate)
   useEffect(() => {
-    if (isPlaying) return;
+    if (isPlaying || !followLive) return;
     const interval = setInterval(() => {
       // If within 1 minute of real current time, sync
       const now = new Date();
@@ -76,7 +87,7 @@ export default function App() {
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [isPlaying, currentDate]);
+  }, [isPlaying, currentDate, followLive]);
 
   // Select city handler
   const handleSelectCity = useCallback((city: CityData | null) => {
@@ -88,6 +99,7 @@ export default function App() {
   const handleResetToNow = useCallback(() => {
     setCurrentDate(new Date());
     setIsPlaying(false);
+    setFollowLive(true);
   }, []);
 
   // Keyboard navigation shortcuts
@@ -139,6 +151,29 @@ export default function App() {
           onSelectCity={handleSelectCity}
         />
       )}
+
+      <div className="absolute top-24 left-4 z-20 flex flex-wrap gap-2 max-w-[calc(100vw-2rem)]">
+        <button onClick={() => setShareUrl(createShareUrl(window.location.href, {
+          date: currentDate, city: selectedCity, view: viewMode, layers,
+        }))} className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-sky-300 hover:bg-slate-800 cursor-pointer">
+          Share view
+        </button>
+        <button disabled={!selectedCity} onClick={() => { setIsPlaying(false); setIsCalendarOpen(true); }}
+          title={selectedCity ? `Annual daylight for ${selectedCity.name}` : 'Select a city first'}
+          className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-amber-300 hover:bg-slate-800 disabled:opacity-40 cursor-pointer">
+          Annual daylight
+        </button>
+      </div>
+      {shareUrl && <ShareViewDialog url={shareUrl} onClose={() => setShareUrl(null)} />}
+      {isCalendarOpen && selectedCity && <DaylightCalendar city={selectedCity} currentDate={currentDate}
+        onClose={() => setIsCalendarOpen(false)} onSelectDate={date => {
+          const nextDate = new Date(date);
+          nextDate.setUTCHours(currentDate.getUTCHours(), currentDate.getUTCMinutes(), currentDate.getUTCSeconds(), 0);
+          setCurrentDate(nextDate);
+          setFollowLive(false);
+          setIsPlaying(false);
+          setIsCalendarOpen(false);
+        }} />}
 
       {/* Ergonomic Collapsible Bottom Control Dock */}
       <SolarHUD
