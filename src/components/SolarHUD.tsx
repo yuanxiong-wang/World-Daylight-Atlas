@@ -129,7 +129,7 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
           <div className="hidden sm:grid grid-cols-2 items-center gap-x-3 gap-y-1 text-xs font-mono">
             <div>
               <span className="text-[10px] text-slate-400 block uppercase">UTC Time</span>
-              <span className="text-sky-300 font-semibold">
+              <span data-testid="utc-clock" className="text-sky-300 font-semibold">
                 {currentDate.toISOString().slice(11, 19)}
               </span>
             </div>
@@ -139,7 +139,7 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
                 {currentDate.toISOString().slice(0, 10)}
               </span>
             </div>
-            <LocalClock date={currentDate} className="col-span-2 whitespace-nowrap" />
+            <LocalClock date={currentDate} className="col-span-2 whitespace-nowrap text-xs font-mono font-semibold text-sky-300" />
           </div>
         </div>
 

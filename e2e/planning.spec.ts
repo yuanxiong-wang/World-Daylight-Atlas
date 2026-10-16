@@ -14,6 +14,11 @@ test('sharing, calendar, city comparison and ground sky work together', async ({
   await page.goto(createShareUrl(baseURL!, snapshot), { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'World Daylight Atlas' })).toBeVisible();
   await expect(page.locator('[data-testid="device-local-time"]:visible')).toHaveText('Local 20:00:00 GMT+8');
+  expect(await page.locator('[data-testid="device-local-time"]:visible').evaluate(node => {
+    const utc = node.parentElement!.querySelector('[data-testid="utc-clock"]')!;
+    const a = getComputedStyle(node), b = getComputedStyle(utc);
+    return a.fontSize === b.fontSize && a.fontFamily === b.fontFamily && a.fontWeight === b.fontWeight;
+  })).toBe(true);
 
   await page.getByRole('button', { name: 'Share view', exact: true }).click();
   let dialog = page.getByRole('dialog');
@@ -33,6 +38,12 @@ test('sharing, calendar, city comparison and ground sky work together', async ({
   await page.getByRole('button', { name: 'Compare cities', exact: true }).click();
   dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('combobox')).toHaveCount(2);
+  await expect(dialog.getByTestId('device-local-time')).toHaveText('Local 20:00:00 GMT+8');
+  expect(await dialog.getByTestId('device-local-time').evaluate(node => {
+    const utc = node.parentElement!.querySelector('[data-testid="utc-clock"]')!;
+    const a = getComputedStyle(node), b = getComputedStyle(utc);
+    return a.fontSize === b.fontSize && a.fontFamily === b.fontFamily && a.fontWeight === b.fontWeight;
+  })).toBe(true);
   await dialog.getByRole('button', { name: '+ Add a third city', exact: true }).click();
   await expect(dialog.getByRole('combobox')).toHaveCount(3);
   await expect(dialog.getByRole('img').locator('path')).toHaveCount(3);
@@ -75,6 +86,11 @@ test('annual calendar fits a narrow screen and returns keyboard focus', async ({
     view: '2d-map', layers: { ...DEFAULT_LAYERS },
   }), { waitUntil: 'domcontentloaded' });
   await expect(page.locator('[data-testid="device-local-time"]:visible')).toHaveText('Local 20:00:00 GMT+8');
+  expect(await page.locator('[data-testid="device-local-time"]:visible').evaluate(node => {
+    const utc = node.parentElement!.querySelector('[data-testid="utc-clock"]')!;
+    const a = getComputedStyle(node), b = getComputedStyle(utc);
+    return a.fontSize === b.fontSize && a.fontFamily === b.fontFamily && a.fontWeight === b.fontWeight;
+  })).toBe(true);
   const trigger = page.getByRole('button', { name: 'Tools', exact: true });
   await trigger.click();
   await page.getByRole('dialog').getByRole('button', { name: 'Annual daylight', exact: true }).click();

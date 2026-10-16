@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { CityData } from '../types';
 import { getDailySolarCurve, getSolarPosition, getSolarTimes } from '../utils/solarCalculator';
 import { formatDaylight } from '../utils/daylightCalendar';
+import { LocalClock } from './LocalClock';
 import { Dialog } from './Dialog';
 
 const COLORS = ['#38bdf8', '#fbbf24', '#c084fc'];
@@ -33,7 +34,10 @@ export function CompareCities({ cities, selectedCity, currentDate, onFocusCity, 
   return (
     <Dialog title="Compare cities" onClose={onClose}>
       <div className="flex flex-wrap justify-between gap-3 mb-5 items-center">
-        <p className="text-sm text-slate-400">One moment around the world · {currentDate.toISOString().slice(0, 16).replace('T', ' ')} UTC</p>
+        <div className="space-y-1">
+          <p data-testid="utc-clock" className="text-sm text-slate-400">One moment around the world · {currentDate.toISOString().slice(0, 16).replace('T', ' ')} UTC</p>
+          <LocalClock date={currentDate} className="text-sm text-slate-400" />
+        </div>
         {ids.length < 3 && <button onClick={() => {
           const next = available.find(city => !ids.includes(city.id));
           if (next) setIds([...ids, next.id]);

@@ -67,7 +67,7 @@ export function MobileControls({ currentDate, cities, selectedCity, layers, view
       <header data-testid="mobile-header" className="fixed top-0 inset-x-0 z-20 flex items-center justify-between gap-2 border-b border-slate-700/60 bg-slate-950/85 backdrop-blur-md px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
         <div className="min-w-0">
           <h1 className="text-xs font-semibold text-white truncate">World Daylight Atlas</h1>
-          <p className="text-[10px] font-mono text-slate-400">{currentDate.toISOString().slice(0, 10)} · {currentDate.toISOString().slice(11, 16)} UTC</p>
+          <p data-testid="utc-clock" className="text-[10px] font-mono text-slate-400">{currentDate.toISOString().slice(0, 10)} · {currentDate.toISOString().slice(11, 16)} UTC</p>
           <LocalClock date={currentDate} />
         </div>
         <button onClick={() => { onChangeViewMode(viewMode === '3d-globe' ? '2d-map' : '3d-globe'); setSheet(null); }}
