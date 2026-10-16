@@ -81,6 +81,7 @@ export default function App() {
   // Select city handler
   const handleSelectCity = useCallback((city: CityData | null) => {
     setSelectedCity(city);
+    setActiveCameraPreset(city ? 'focus-city' : null);
   }, []);
 
   // Reset to current time
