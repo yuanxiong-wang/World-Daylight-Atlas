@@ -5,6 +5,7 @@ import { getSolarPosition, getSolarTimes, SOLAR_MILESTONES } from '../utils/sola
 import { getLunarPhase } from '../utils/lunarCalculator';
 import { formatDaylight } from '../utils/daylightCalendar';
 import { MoonDiskSVG } from './MoonPhaseBadge';
+import { LocalClock } from './LocalClock';
 import { Dialog } from './Dialog';
 
 export type MobileTool = 'tour' | 'share' | 'calendar' | 'compare' | 'sky' | 'analytics' | 'inspector';
@@ -67,6 +68,7 @@ export function MobileControls({ currentDate, cities, selectedCity, layers, view
         <div className="min-w-0">
           <h1 className="text-xs font-semibold text-white truncate">World Daylight Atlas</h1>
           <p className="text-[10px] font-mono text-slate-400">{currentDate.toISOString().slice(0, 10)} · {currentDate.toISOString().slice(11, 16)} UTC</p>
+          <LocalClock date={currentDate} />
         </div>
         <button onClick={() => { onChangeViewMode(viewMode === '3d-globe' ? '2d-map' : '3d-globe'); setSheet(null); }}
           aria-label={viewMode === '3d-globe' ? 'Switch to 2D map' : 'Switch to 3D globe'}

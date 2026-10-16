@@ -18,6 +18,7 @@ import {
 import { SubsolarPoint, GlobeLayerSettings, CityData, ViewMode, LunarPhaseType } from '../types';
 import { getSolarPosition, SOLAR_MILESTONES } from '../utils/solarCalculator';
 import { getLunarPhase } from '../utils/lunarCalculator';
+import { LocalClock } from './LocalClock';
 import { MoonPhaseBadge, MoonDiskSVG } from './MoonPhaseBadge';
 
 interface SolarHUDProps {
@@ -125,7 +126,7 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
           <div className="hidden sm:block h-6 w-px bg-slate-800" />
 
           {/* UTC & Local Clock */}
-          <div className="hidden sm:flex items-center gap-3 text-xs font-mono">
+          <div className="hidden sm:grid grid-cols-2 items-center gap-x-3 gap-y-1 text-xs font-mono">
             <div>
               <span className="text-[10px] text-slate-400 block uppercase">UTC Time</span>
               <span className="text-sky-300 font-semibold">
@@ -138,6 +139,7 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
                 {currentDate.toISOString().slice(0, 10)}
               </span>
             </div>
+            <LocalClock date={currentDate} className="col-span-2 whitespace-nowrap" />
           </div>
         </div>
 

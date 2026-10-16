@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { createShareUrl, readSharedView, DEFAULT_LAYERS } from '../src/utils/viewState';
 
+test.use({ timezoneId: 'Asia/Shanghai' });
+
 test('sharing, calendar, city comparison and ground sky work together', async ({ page, baseURL }, info) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -11,6 +13,7 @@ test('sharing, calendar, city comparison and ground sky work together', async ({
   };
   await page.goto(createShareUrl(baseURL!, snapshot), { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'World Daylight Atlas' })).toBeVisible();
+  await expect(page.locator('[data-testid="device-local-time"]:visible')).toHaveText('Local 20:00:00 GMT+8');
 
   await page.getByRole('button', { name: 'Share view', exact: true }).click();
   let dialog = page.getByRole('dialog');
@@ -71,6 +74,7 @@ test('annual calendar fits a narrow screen and returns keyboard focus', async ({
     city: { id: 'london', name: 'London', country: 'UK', lat: 51.5, lng: 0, timezone: 'Europe/London' },
     view: '2d-map', layers: { ...DEFAULT_LAYERS },
   }), { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('[data-testid="device-local-time"]:visible')).toHaveText('Local 20:00:00 GMT+8');
   const trigger = page.getByRole('button', { name: 'Tools', exact: true });
   await trigger.click();
   await page.getByRole('dialog').getByRole('button', { name: 'Annual daylight', exact: true }).click();
