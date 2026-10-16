@@ -1,4 +1,48 @@
-import { SubsolarPoint, SolarPosition, DaylightPhase, SolarTimes, LatitudeDaylightData } from '../types';
+import type { SubsolarPoint, SolarPosition, DaylightPhase, SolarTimes, LatitudeDaylightData } from '../types';
+
+/** Fixed-date seasonal benchmarks, named for the observer's hemisphere. */
+export function getObserverSeasonalDates(year: number, latitude: number) {
+  return {
+    summerDate: new Date(Date.UTC(year, latitude >= 0 ? 5 : 11, 21, 12)),
+    equinoxDate: new Date(Date.UTC(year, 2, 20, 12)),
+    winterDate: new Date(Date.UTC(year, latitude >= 0 ? 11 : 5, 21, 12)),
+  };
+}
+
+/** Geometric solar-noon altitude extrema, including zenith crossings in the tropics. */
+export function getAnnualSolarAltitudeRange(latitude: number, year: number) {
+  let minDeclination = 90;
+  let maxDeclination = -90;
+  const end = Date.UTC(year + 1, 0, 1);
+  for (let time = Date.UTC(year, 0, 1, 12); time < end; time += 86400000) {
+    const declination = getSunDeclination(new Date(time));
+    minDeclination = Math.min(minDeclination, declination);
+    maxDeclination = Math.max(maxDeclination, declination);
+  }
+  // Noon altitude is 90 - |latitude - declination|. Declination varies
+  // continuously, so any latitude between its extrema reaches the zenith.
+  const nearestDeclination = Math.max(minDeclination, Math.min(maxDeclination, latitude));
+  const maxElevation = 90 - Math.abs(latitude - nearestDeclination);
+  const minElevation = 90 - Math.max(
+    Math.abs(latitude - minDeclination), Math.abs(latitude - maxDeclination),
+  );
+  return { minElevation, maxElevation, range: maxElevation - minElevation };
+}
+
+/** Preserve time continuity instead of joining points across the opposite phase. */
+export function splitSolarPath<T extends { elev: number }>(samples: T[]) {
+  const daySegments: T[][] = [];
+  const nightSegments: T[][] = [];
+  let previousDay: boolean | undefined;
+  for (const sample of samples) {
+    const isDay = sample.elev >= 0;
+    const segments = isDay ? daySegments : nightSegments;
+    if (isDay !== previousDay) segments.push([]);
+    segments[segments.length - 1].push(sample);
+    previousDay = isDay;
+  }
+  return { daySegments, nightSegments };
+}
 
 const DEG2RAD = Math.PI / 180;
 const RAD2DEG = 180 / Math.PI;
@@ -485,3 +529,4 @@ export function getSeasonalDates(year: number) {
     { label: 'December Solstice (Winter)', date: new Date(Date.UTC(year, 11, 21, 12, 0, 0)), desc: 'Shortest day in North, 24h Antarctic sun' },
   ];
 }
+

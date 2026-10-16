@@ -396,30 +396,30 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
                     <button
                       onClick={() => handleJumpToSeason(2, 20)}
                       className="px-2 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 font-medium transition-colors cursor-pointer flex items-center gap-1"
-                      title="Jump simulation date to Spring Equinox (March 20, δ=0°)"
+                      title="Jump simulation date to March Equinox (March 20, δ=0°)"
                     >
                       <span>🌿</span> Mar 20 (Equinox)
                     </button>
                     <button
                       onClick={() => handleJumpToSeason(5, 21)}
                       className="px-2 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-medium transition-colors cursor-pointer flex items-center gap-1"
-                      title="Jump simulation date to Summer Solstice (June 21, δ=+23.44°)"
+                      title="Jump simulation date to June Solstice (June 21, δ=+23.44°)"
                     >
-                      <span>☀️</span> Jun 21 (Summer)
+                      <span>☀️</span> Jun 21 (Solstice)
                     </button>
                     <button
                       onClick={() => handleJumpToSeason(8, 22)}
                       className="px-2 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 font-medium transition-colors cursor-pointer flex items-center gap-1"
-                      title="Jump simulation date to Autumn Equinox (September 22, δ=0°)"
+                      title="Jump simulation date to September Equinox (September 22, δ=0°)"
                     >
                       <span>🍁</span> Sep 22 (Equinox)
                     </button>
                     <button
                       onClick={() => handleJumpToSeason(11, 21)}
                       className="px-2 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-300 font-medium transition-colors cursor-pointer flex items-center gap-1"
-                      title="Jump simulation date to Winter Solstice (December 21, δ=-23.44°)"
+                      title="Jump simulation date to December Solstice (December 21, δ=-23.44°)"
                     >
-                      <span>❄️</span> Dec 21 (Winter)
+                      <span>❄️</span> Dec 21 (Solstice)
                     </button>
                   </div>
                 </div>
@@ -749,3 +749,4 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
     </>
   );
 };
+

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SubsolarPoint, CityData, GlobeLayerSettings } from '../types';
 import { createEarthTextures, createStarfield } from '../utils/earthTextures';
-import { getSolarPosition } from '../utils/solarCalculator';
+import { getSolarPosition, getObserverSeasonalDates, getAnnualSolarAltitudeRange, splitSolarPath } from '../utils/solarCalculator';
 
 interface EarthGlobeProps {
   currentDate: Date;
@@ -607,6 +607,11 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
   }, [subsolarPoint]);
 
   // Build / Update 3D Sun Trajectory Across The Sky Overlay for Selected Location
+  const solarYear = currentDate.getUTCFullYear();
+  const observerLatitude = selectedCity?.lat;
+  const annualRange = useMemo(() => observerLatitude === undefined ? null :
+    getAnnualSolarAltitudeRange(observerLatitude, solarYear), [observerLatitude, solarYear]);
+
   useEffect(() => {
     const group = sunTrajectoryGroupRef.current;
     if (!group) return;
@@ -694,8 +699,6 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
 
     // 4. Diurnal Sun Path Generator
     const computeDiurnalPath = (date: Date, numSamples = 72) => {
-      const dayCurvePts: THREE.Vector3[] = [];
-      const nightCurvePts: THREE.Vector3[] = [];
       const allPts: { pt: THREE.Vector3; elev: number; az: number; date: Date }[] = [];
 
       const bDate = new Date(date);
@@ -719,12 +722,6 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
         const pt = pObs.clone().addScaledVector(localDir, R_DOME);
         allPts.push({ pt, elev: pos.elevation, az: pos.azimuth, date: sampleTime });
 
-        if (pos.elevation >= 0) {
-          dayCurvePts.push(pt);
-        } else {
-          nightCurvePts.push(pt);
-        }
-
         if (pos.elevation > maxElev) {
           maxElev = pos.elevation;
           maxElevPt = pt;
@@ -745,9 +742,10 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
         }
       }
 
+      const { daySegments, nightSegments } = splitSolarPath(allPts);
       return {
-        dayCurvePts,
-        nightCurvePts,
+        daySegments: daySegments.filter(segment => segment.length >= 2).map(segment => segment.map(sample => sample.pt)),
+        nightSegments: nightSegments.filter(segment => segment.length >= 2).map(segment => segment.map(sample => sample.pt)),
         allPts,
         maxElev,
         maxElevPt,
@@ -763,22 +761,22 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     // 5. Render Seasonal Variation Benchmark Paths (Solstices & Equinoxes)
     if (layers.showSeasonalPaths) {
       const year = currentDate.getUTCFullYear();
-      const summerDate = new Date(Date.UTC(year, 5, 21, 12, 0, 0)); // June 21 Solstice
-      const equinoxDate = new Date(Date.UTC(year, 2, 20, 12, 0, 0)); // March 20 Equinox
-      const winterDate = new Date(Date.UTC(year, 11, 21, 12, 0, 0)); // December 21 Solstice
+      const { summerDate, equinoxDate, winterDate } = getObserverSeasonalDates(year, selectedCity.lat);
 
       const summerPath = computeDiurnalPath(summerDate, 72);
       const equinoxPath = computeDiurnalPath(equinoxDate, 72);
       const winterPath = computeDiurnalPath(winterDate, 72);
 
       // (A) Summer Solstice Path (Warm Golden-Amber Arc)
-      if (summerPath.dayCurvePts.length >= 2) {
-        const curve = new THREE.CatmullRomCurve3(summerPath.dayCurvePts, false);
-        const tube = new THREE.Mesh(
-          new THREE.TubeGeometry(curve, 48, 0.18, 8, false),
-          new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.9 })
-        );
-        group.add(tube);
+      if (summerPath.daySegments.length > 0) {
+        for (const points of summerPath.daySegments) {
+          const curve = new THREE.CatmullRomCurve3(points, false);
+          const tube = new THREE.Mesh(
+            new THREE.TubeGeometry(curve, 48, 0.18, 8, false),
+            new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.9 })
+          );
+          group.add(tube);
+        }
 
         // Apex marker & interactive label
         const sApexMesh = new THREE.Mesh(
@@ -804,8 +802,8 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
         sLabel.userData = { isSeasonalMarker: true, date: summerDate, name: 'Summer Solstice' };
         group.add(sLabel);
       }
-      if (summerPath.nightCurvePts.length >= 2) {
-        const nGeo = new THREE.BufferGeometry().setFromPoints(summerPath.nightCurvePts);
+      for (const points of summerPath.nightSegments) {
+        const nGeo = new THREE.BufferGeometry().setFromPoints(points);
         const nMat = new THREE.LineDashedMaterial({ color: 0xf59e0b, dashSize: 0.8, gapSize: 0.8, transparent: true, opacity: 0.35 });
         const nLine = new THREE.Line(nGeo, nMat);
         nLine.computeLineDistances();
@@ -813,13 +811,15 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       }
 
       // (B) Equinox Path (Emerald Green Arc) - passes through exact East and West
-      if (equinoxPath.dayCurvePts.length >= 2) {
-        const curve = new THREE.CatmullRomCurve3(equinoxPath.dayCurvePts, false);
-        const tube = new THREE.Mesh(
-          new THREE.TubeGeometry(curve, 48, 0.18, 8, false),
-          new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.9 })
-        );
-        group.add(tube);
+      if (equinoxPath.daySegments.length > 0) {
+        for (const points of equinoxPath.daySegments) {
+          const curve = new THREE.CatmullRomCurve3(points, false);
+          const tube = new THREE.Mesh(
+            new THREE.TubeGeometry(curve, 48, 0.18, 8, false),
+            new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.9 })
+          );
+          group.add(tube);
+        }
 
         // Apex marker & interactive label
         const eqApexMesh = new THREE.Mesh(
@@ -845,8 +845,8 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
         eqLabel.userData = { isSeasonalMarker: true, date: equinoxDate, name: 'Equinox' };
         group.add(eqLabel);
       }
-      if (equinoxPath.nightCurvePts.length >= 2) {
-        const nGeo = new THREE.BufferGeometry().setFromPoints(equinoxPath.nightCurvePts);
+      for (const points of equinoxPath.nightSegments) {
+        const nGeo = new THREE.BufferGeometry().setFromPoints(points);
         const nMat = new THREE.LineDashedMaterial({ color: 0x10b981, dashSize: 0.8, gapSize: 0.8, transparent: true, opacity: 0.35 });
         const nLine = new THREE.Line(nGeo, nMat);
         nLine.computeLineDistances();
@@ -854,13 +854,15 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       }
 
       // (C) Winter Solstice Path (Ice Cyan Arc)
-      if (winterPath.dayCurvePts.length >= 2) {
-        const curve = new THREE.CatmullRomCurve3(winterPath.dayCurvePts, false);
-        const tube = new THREE.Mesh(
-          new THREE.TubeGeometry(curve, 48, 0.18, 8, false),
-          new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.9 })
-        );
-        group.add(tube);
+      if (winterPath.daySegments.length > 0) {
+        for (const points of winterPath.daySegments) {
+          const curve = new THREE.CatmullRomCurve3(points, false);
+          const tube = new THREE.Mesh(
+            new THREE.TubeGeometry(curve, 48, 0.18, 8, false),
+            new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.9 })
+          );
+          group.add(tube);
+        }
 
         // Apex marker & interactive label
         const wApexMesh = new THREE.Mesh(
@@ -886,8 +888,8 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
         wLabel.userData = { isSeasonalMarker: true, date: winterDate, name: 'Winter Solstice' };
         group.add(wLabel);
       }
-      if (winterPath.nightCurvePts.length >= 2) {
-        const nGeo = new THREE.BufferGeometry().setFromPoints(winterPath.nightCurvePts);
+      for (const points of winterPath.nightSegments) {
+        const nGeo = new THREE.BufferGeometry().setFromPoints(points);
         const nMat = new THREE.LineDashedMaterial({ color: 0x38bdf8, dashSize: 0.8, gapSize: 0.8, transparent: true, opacity: 0.35 });
         const nLine = new THREE.Line(nGeo, nMat);
         nLine.computeLineDistances();
@@ -911,8 +913,8 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       group.add(noonLine);
 
       // (D2) Seasonal Altitude Variation Range Callout Label along meridian
-      if (Math.abs(summerPath.maxElev - winterPath.maxElev) > 1) {
-        const deltaDeg = Math.abs(summerPath.maxElev - winterPath.maxElev);
+      if (annualRange && annualRange.range > 1) {
+        const deltaDeg = annualRange.range;
         const midPoint = summerPath.maxElevPt.clone().add(winterPath.maxElevPt).multiplyScalar(0.5);
         const deltaLabel = createLabelSprite(`↕ Seasonal Range: Δ${deltaDeg.toFixed(1)}°`, '#f8fafc', 'rgba(15, 23, 42, 0.9)');
         deltaLabel.position.copy(midPoint.clone().addScaledVector(north, -1.5).addScaledVector(up, 1.2));
@@ -921,7 +923,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       }
 
       // (E) Translucent Solar Envelope Mesh (The annual sky envelope between Winter & Summer paths)
-      if (summerPath.dayCurvePts.length > 2 && winterPath.dayCurvePts.length > 2) {
+      if (summerPath.daySegments.length > 0 && winterPath.daySegments.length > 0) {
         const envelopeGeo = new THREE.BufferGeometry();
         const envPositions: number[] = [];
         const envIndices: number[] = [];
@@ -929,6 +931,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
         // Match sample points between summer and winter
         const minLen = Math.min(summerPath.allPts.length, winterPath.allPts.length);
         let vertexCount = 0;
+        let previousIncluded = false;
 
         for (let i = 0; i < minLen; i++) {
           const pSummer = summerPath.allPts[i];
@@ -939,12 +942,15 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
             envPositions.push(pWinter.pt.x, pWinter.pt.y, pWinter.pt.z);
             envPositions.push(pSummer.pt.x, pSummer.pt.y, pSummer.pt.z);
 
-            if (vertexCount >= 2) {
+            if (previousIncluded) {
               const base = vertexCount - 2;
               envIndices.push(base, base + 1, base + 2);
               envIndices.push(base + 1, base + 3, base + 2);
             }
             vertexCount += 2;
+            previousIncluded = true;
+          } else {
+            previousIncluded = false;
           }
         }
 
@@ -966,8 +972,8 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     }
 
     // 6. Draw Today's Daylight Arc (Prominent Thick Glowing Golden Ribbon)
-    if (todayPath.dayCurvePts.length >= 2) {
-      const dayCurve = new THREE.CatmullRomCurve3(todayPath.dayCurvePts, false);
+    for (const points of todayPath.daySegments) {
+      const dayCurve = new THREE.CatmullRomCurve3(points, false);
       const tubeGeo = new THREE.TubeGeometry(dayCurve, 64, 0.28, 8, false);
       const tubeMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
       const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
@@ -985,8 +991,8 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     }
 
     // Draw Today's Night Arc
-    if (todayPath.nightCurvePts.length >= 2) {
-      const nightGeo = new THREE.BufferGeometry().setFromPoints(todayPath.nightCurvePts);
+    for (const points of todayPath.nightSegments) {
+      const nightGeo = new THREE.BufferGeometry().setFromPoints(points);
       const nightMat = new THREE.LineDashedMaterial({
         color: 0x818cf8,
         dashSize: 1.2,
@@ -1105,7 +1111,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     curSunLabel.position.copy(curSunPos.clone().addScaledVector(up, 2.2));
     group.add(curSunLabel);
 
-  }, [selectedCity, currentDate, layers.showSunTrajectory, layers.showSeasonalPaths]);
+  }, [selectedCity, currentDate, layers.showSunTrajectory, layers.showSeasonalPaths, annualRange]);
 
   // Update Layer Toggles
   useEffect(() => {
@@ -1304,18 +1310,15 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     const noonH = Math.floor(solarNoonHourUtc);
     const noonM = Math.floor((solarNoonHourUtc % 1) * 60);
 
-    const summerDate = new Date(Date.UTC(year, 5, 21, noonH, noonM, 0));
-    const equinoxDate = new Date(Date.UTC(year, 2, 20, noonH, noonM, 0));
-    const winterDate = new Date(Date.UTC(year, 11, 21, noonH, noonM, 0));
+    const { summerDate, equinoxDate, winterDate } = getObserverSeasonalDates(year, selectedCity.lat);
+    for (const date of [summerDate, equinoxDate, winterDate]) date.setUTCHours(noonH, noonM, 0, 0);
 
     const sPos = getSolarPosition(selectedCity.lat, selectedCity.lng, summerDate);
     const eqPos = getSolarPosition(selectedCity.lat, selectedCity.lng, equinoxDate);
     const wPos = getSolarPosition(selectedCity.lat, selectedCity.lng, winterDate);
 
-    // High and low seasonal peaks
-    const maxElev = Math.max(sPos.elevation, wPos.elevation);
-    const minElev = Math.min(sPos.elevation, wPos.elevation);
-    const deltaRange = Math.max(0, maxElev - minElev);
+    // Shared annual extrema also include tropical zenith crossings.
+    const deltaRange = annualRange?.range ?? 0;
 
     return {
       summerDate,
@@ -1327,7 +1330,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       deltaRange,
       isNorthern: selectedCity.lat >= 0,
     };
-  }, [selectedCity, currentDate]);
+  }, [selectedCity, currentDate, annualRange]);
 
   return (
     <div className="relative w-full h-full select-none overflow-hidden bg-slate-950">
@@ -1422,7 +1425,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
                     <span className="text-amber-400 font-bold">☀️</span>
                     <div>
                       <span className="font-semibold text-amber-200 block leading-tight">Summer Solstice</span>
-                      <span className="text-[10px] text-amber-400/80 font-mono">Jun 21 • δ=+23.4°</span>
+                      <span className="text-[10px] text-amber-400/80 font-mono">{seasonalMetrics.isNorthern ? 'Jun 21 • δ=+23.4°' : 'Dec 21 • δ=-23.4°'}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1458,7 +1461,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
                       <button
                         onClick={() => onSelectDate(seasonalMetrics.equinoxDate)}
                         className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[10px] font-semibold transition-colors cursor-pointer"
-                        title="Jump simulation date to Spring Equinox"
+                        title="Jump simulation date to March Equinox"
                       >
                         Jump →
                       </button>
@@ -1472,7 +1475,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
                     <span className="text-sky-400 font-bold">❄️</span>
                     <div>
                       <span className="font-semibold text-sky-200 block leading-tight">Winter Solstice</span>
-                      <span className="text-[10px] text-sky-400/80 font-mono">Dec 21 • δ=-23.4°</span>
+                      <span className="text-[10px] text-sky-400/80 font-mono">{seasonalMetrics.isNorthern ? 'Dec 21 • δ=-23.4°' : 'Jun 21 • δ=+23.4°'}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1531,3 +1534,4 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     </div>
   );
 };
+
