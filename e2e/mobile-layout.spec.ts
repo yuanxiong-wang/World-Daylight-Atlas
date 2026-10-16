@@ -28,6 +28,11 @@ for (const viewport of [
       { x: viewport.width / 2, y: (header.y + header.height + nav.y) / 2 });
     expect(hit).toBe('CANVAS');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.mouse.move(viewport.width / 2, (header.y + header.height + nav.y) / 2);
+    await page.mouse.down();
+    await page.mouse.move(viewport.width / 2 + 35, (header.y + header.height + nav.y) / 2 + 15, { steps: 5 });
+    await page.mouse.up();
+    await expect(page.getByRole('button', { name: 'City details for Shanghai' })).toBeVisible();
     await page.screenshot({ path: info.outputPath('clear-globe.png') });
 
     await page.getByRole('button', { name: 'Cities', exact: true }).click();

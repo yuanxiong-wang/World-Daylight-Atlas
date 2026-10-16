@@ -247,6 +247,8 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
   onTriggerCameraPreset,
 }) => {
   const trajectoryPicksRef = useRef(new Map<THREE.Object3D, SolarPickPayload>());
+  const activePointersRef = useRef(new Set<number>());
+  const tapStartRef = useRef<{ id: number; x: number; y: number } | null>(null);
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -1022,7 +1024,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
   }, [cities, selectedCity]);
 
   // Handle Raycasting for City Clicks and Direct Earth Clicks
-  const handlePointerDown = useCallback(
+  const handlePick = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!mountRef.current || !cameraRef.current || !citiesGroupRef.current) return;
       const rect = mountRef.current.getBoundingClientRect();
@@ -1160,7 +1162,26 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       <div
         ref={mountRef}
         data-testid="globe-viewport"
-        onPointerDown={handlePointerDown}
+        onPointerDown={event => {
+          activePointersRef.current.add(event.pointerId);
+          tapStartRef.current = activePointersRef.current.size === 1
+            ? { id: event.pointerId, x: event.clientX, y: event.clientY } : null;
+        }}
+        onPointerMove={event => {
+          const start = tapStartRef.current;
+          if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) tapStartRef.current = null;
+        }}
+        onPointerUp={event => {
+          const start = tapStartRef.current;
+          activePointersRef.current.delete(event.pointerId);
+          tapStartRef.current = null;
+          if (start?.id === event.pointerId && activePointersRef.current.size === 0 &&
+              Math.hypot(event.clientX - start.x, event.clientY - start.y) <= 8) handlePick(event);
+        }}
+        onPointerCancel={event => {
+          activePointersRef.current.delete(event.pointerId);
+          tapStartRef.current = null;
+        }}
         className="w-full h-full cursor-grab active:cursor-grabbing"
       />
 
