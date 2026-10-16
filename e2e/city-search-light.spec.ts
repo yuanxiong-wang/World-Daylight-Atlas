@@ -41,6 +41,12 @@ for (const mobile of [false, true]) {
     await dialog.getByRole('button', { name: 'View on globe →' }).nth(1).click();
     if (mobile) await expect(page.getByRole('button', { name: 'City details for Porto' })).toBeVisible();
     else await expect(page.getByTestId('desktop-city-panel').getByRole('heading', { name: 'Porto', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: mobile ? 'Cities' : /Cities \(/, exact: mobile }).click();
+    const picker = page.getByTestId('city-search');
+    await picker.getByRole('textbox', { name: 'Search cities' }).clear();
+    await expect(picker.getByRole('button')).toHaveCount(45);
+    await expect(picker.getByRole('button', { name: /Kyoto|Porto/ })).toHaveCount(0);
+    if (!mobile) await expect(page.getByRole('button', { name: 'Cities (45)', exact: true })).toBeVisible();
     expect(errors).toEqual([]);
   });
 }

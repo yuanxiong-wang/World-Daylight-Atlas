@@ -13,24 +13,19 @@ export function CompareCities({ cities, selectedCity, currentDate, onFocusCity, 
   cities: CityData[]; selectedCity: CityData | null; currentDate: Date;
   onFocusCity: (city: CityData) => void; onClose: () => void;
 }) {
-  const [extra, setExtra] = useState<CityData[]>([]);
   const [searchSlot, setSearchSlot] = useState<number | null>(null);
-  const available = useMemo(() => {
-    const combined = [...cities, ...(selectedCity ? [selectedCity] : []), ...extra];
-    return combined.filter((city, index) => combined.findIndex(c => c.id === city.id) === index);
-  }, [cities, selectedCity, extra]);
-  const [ids, setIds] = useState(() => {
-    const first = selectedCity ?? available.find(city => city.id === 'london') ?? available[0];
-    const second = available.find(city => city.id === 'shanghai' && city.id !== first.id)
-      ?? available.find(city => city.id !== first.id)!;
-    return [first.id, second.id];
+  const [compared, setCompared] = useState<CityData[]>(() => {
+    const first = selectedCity ?? cities.find(city => city.id === 'london') ?? cities[0];
+    const second = cities.find(city => city.id === 'shanghai' && city.id !== first.id)
+      ?? cities.find(city => city.id !== first.id)!;
+    return [first, second];
   });
-  const compared = ids.map(id => available.find(city => city.id === id)!);
+  const ids = compared.map(city => city.id);
   const results = useMemo(() => compared.map(city => ({
     city, position: getSolarPosition(city.lat, city.lng, currentDate),
     times: getSolarTimes(city.lat, city.lng, currentDate),
     curve: getDailySolarCurve(city.lat, city.lng, currentDate),
-  })), [ids, available, currentDate]);
+  })), [compared, currentDate]);
   const x = (hour: number) => 45 + hour / 24 * 810;
   const y = (altitude: number) => 20 + (90 - altitude) / 180 * 220;
   const hour = currentDate.getUTCHours() + currentDate.getUTCMinutes() / 60;
@@ -45,16 +40,15 @@ export function CompareCities({ cities, selectedCity, currentDate, onFocusCity, 
           <LocalClock date={currentDate} className="text-sm text-slate-400" />
         </div>
         {ids.length < 3 && <button onClick={() => {
-          const next = available.find(city => !ids.includes(city.id));
-          if (next) setIds([...ids, next.id]);
+          const next = cities.find(city => !ids.includes(city.id));
+          if (next) setCompared([...compared, next]);
         }} className="rounded-lg bg-slate-800 hover:bg-slate-700 px-3 py-2 text-sm cursor-pointer">+ Add a third city</button>}
       </div>
       {searchSlot !== null && <section className="mb-4 rounded-xl border border-slate-700 p-3">
         <div className="flex justify-between items-center gap-3 mb-3"><h3 className="text-sm">Find city {searchSlot + 1} worldwide</h3>
           <button className="min-h-11 px-3 text-xs underline cursor-pointer" onClick={() => setSearchSlot(null)}>Cancel search</button></div>
-        <CitySearch excludedCities={compared.filter((_, index) => index !== searchSlot)} cities={available.filter(city => !ids.includes(city.id))} onSelect={city => {
-          if (!available.some(saved => saved.id === city.id)) setExtra(previous => [...previous, city]);
-          if (!ids.some((id, i) => i !== searchSlot && id === city.id)) setIds(previous => previous.map((id, i) => i === searchSlot ? city.id : id));
+        <CitySearch excludedCities={compared.filter((_, index) => index !== searchSlot)} cities={cities.filter(city => !ids.includes(city.id))} onSelect={city => {
+          if (!ids.some((id, i) => i !== searchSlot && id === city.id)) setCompared(previous => previous.map((current, i) => i === searchSlot ? city : current));
           setSearchSlot(null);
         }} />
       </section>}
@@ -63,13 +57,14 @@ export function CompareCities({ cities, selectedCity, currentDate, onFocusCity, 
           <section key={index} className="rounded-xl border border-slate-700 bg-slate-950/50 p-4">
             <div className="flex gap-2 items-center mb-4">
               <label className="flex-1 min-w-0 text-xs text-slate-400">City {index + 1}
-                <select value={city.id} onChange={event => setIds(ids.map((id, i) => i === index ? event.target.value : id))}
+                <select value={city.id} onChange={event => setCompared(compared.map((current, i) => i === index ? cities.find(option => option.id === event.target.value)! : current))}
                   className="mt-1 block w-full rounded-lg bg-slate-800 p-2 text-sm" style={{ color: COLORS[index] }}>
-                  {available.map(option => <option key={option.id} value={option.id}
+                  {!cities.some(option => option.id === city.id) && <option value={city.id} disabled>Search result: {city.name}, {city.country}</option>}
+                  {cities.map(option => <option key={option.id} value={option.id}
                     disabled={ids.includes(option.id) && option.id !== city.id}>{option.name}, {option.country}</option>)}
                 </select>
               </label>
-              {ids.length === 3 && <button onClick={() => setIds(ids.filter((_, i) => i !== index))}
+              {ids.length === 3 && <button onClick={() => setCompared(compared.filter((_, i) => i !== index))}
                 aria-label={`Remove ${city.name}`} className="p-2 text-slate-400 hover:text-white cursor-pointer">✕</button>}
             </div>
             <button onClick={() => setSearchSlot(index)} className="min-h-11 mb-2 text-xs text-sky-300 underline cursor-pointer">Search worldwide for city {index + 1}</button>
