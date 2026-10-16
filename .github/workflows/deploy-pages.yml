@@ -31,6 +31,17 @@ jobs:
         run: npm run lint
       - name: Build production assets
         run: npm run build
+      - name: Install browser for interaction checks
+        run: npx playwright install --with-deps chromium
+      - name: Browser interaction checks
+        run: npm run test:e2e
+      - name: Save browser screenshots and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-checks
+          path: test-results/
+          if-no-files-found: ignore
       - name: Include custom domain
         run: cp CNAME dist/CNAME
       - uses: actions/upload-pages-artifact@v3
@@ -47,3 +58,4 @@ jobs:
       - name: Deploy compiled site
         id: deployment
         uses: actions/deploy-pages@v4
+

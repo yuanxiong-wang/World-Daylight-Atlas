@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createShareUrl, readSharedView, DEFAULT_LAYERS } from '../src/utils/viewState.ts';
 import { getDaylightCalendar, formatDaylight } from '../src/utils/daylightCalendar.ts';
+import { projectSkyPoint, normalizeHeading, clampSkyPitch } from '../src/utils/skyProjection.ts';
 
 const city = { id: 'custom', name: '上海 · River 🌞', country: 'China', lat: 31.23, lng: 121.47, timezone: 'Asia/Shanghai' };
 const snapshot = {
@@ -60,4 +61,17 @@ test('calendar tracks southern seasons and polar day/night', () => {
   assert.ok(polar.some(d => d.polarNight && d.minutes === 0));
   assert.equal(formatDaylight(119.8), '2h 00m');
   assert.equal(formatDaylight(1440), '24h 00m');
+});
+
+test('ground-level projection respects compass direction, altitude and observer pitch', () => {
+  const north = projectSkyPoint(0, 0, 0, 0, 800, 400);
+  assert.deepEqual(north, { x: 400, y: 200 });
+  assert.equal(projectSkyPoint(180, 0, 0, 0, 800, 400), null);
+  assert.ok(projectSkyPoint(30, 0, 0, 0, 800, 400).x > 400);
+  assert.ok(projectSkyPoint(0, 30, 0, 0, 800, 400).y < 200);
+  assert.ok(Math.abs(projectSkyPoint(90, 20, 90, 20, 800, 400).y - 200) < 1e-8);
+  assert.deepEqual(projectSkyPoint(360, 0, 360, 0, 800, 400), north);
+  assert.equal(normalizeHeading(-5), 355);
+  assert.equal(clampSkyPitch(100), 80);
+  assert.equal(clampSkyPitch(-90), -10);
 });

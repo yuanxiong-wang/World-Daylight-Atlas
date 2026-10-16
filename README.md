@@ -12,6 +12,10 @@ Explore sunlight around the world with an interactive 3D globe, a 2D daylight ma
 - **Seasonal comparisons:** March and September equinoxes and June and December solstices share the same milestone names, colors, and dates across the dock, globe, and inspector.
 - **Local solar charts:** compare altitude curves, daily peaks, daylight duration, twilight times, and annual noon altitude range.
 - **Time simulation:** scrub the UTC timeline, change dates, adjust playback speed, or return to the present.
+- **Shareable views:** copy a snapshot link with the location, UTC date/time, map mode, and layer settings. Shared views open paused, including custom observation points.
+- **Annual daylight calendar:** inspect every day of a year, compare longest/shortest daylight duration, see polar day/night counts, and click a date to jump to it.
+- **Compare cities:** compare two or three locations' clocks, solar altitude, sunrise/sunset, daylight duration, and 24-hour curves.
+- **Ground-level sky:** look around an ideal horizon with compass directions, current Sun position, and daily/seasonal solar paths; drag, use arrow keys, or step through time.
 - **Additional views:** global daylight analytics, lunar phases, and camera presets.
 
 The globe's seasonal-path toggle and the inspector's seasonal-curve toggle work independently.
@@ -39,6 +43,10 @@ The current app runs in the browser and does not require API keys. The variables
 - Click a trajectory apex's pick area to jump to its sampled solar noon.
 - Open **Trajectory Chart** for local altitude curves and daylight comparisons.
 - Use the dock to control time, layers, cities, lunar information, and camera presets.
+- Use **Share view**, **Annual daylight**, **Compare cities**, and **Ground-level sky** in the toolbar below the header. Select a location before opening its calendar or sky view.
+- Calendar dates and comparison curves use UTC. City clocks use each location's time zone. Calendar years span 1900–2100.
+- In the ground-level sky, drag or use arrow keys to look around. **Face the Sun** recenters the view; hour/day buttons change the simulation time. Its seasonal overlay is independent of the globe and inspector overlays.
+- Shared links contain selected coordinates in the URL fragment. Share them with people you want to see that location. Camera orientation and open dialogs are not included.
 
 | Shortcut | Action |
 | --- | --- |
@@ -57,6 +65,7 @@ Shortcuts are ignored while typing in an input or text area.
 | `npm test` | Run numerical regression tests |
 | `npm run lint` | Run TypeScript checks without emitting files |
 | `npm run build` | Build production assets into `dist/` |
+| `npm run test:e2e` | Run Playwright browser checks against the production build |
 | `npm run preview` | Preview the production build locally |
 
 Before publishing changes, run:
@@ -67,11 +76,19 @@ npm run lint
 npm run build
 ```
 
+For browser checks, install Chromium once, then test the production build:
+
+```bash
+npx playwright install chromium
+npm run build
+npm run test:e2e
+```
+
 ## Deployment
 
 ### GitHub Pages — current hosting
 
-[The Pages workflow](.github/workflows/deploy-pages.yml) runs on pushes to `main` and supports manual execution. It installs dependencies, runs regression tests and type checks, builds with Vite, copies `CNAME` into `dist/`, and deploys the compiled output.
+[The Pages workflow](.github/workflows/deploy-pages.yml) runs on pushes to `main` and supports manual execution. It installs dependencies, runs regression tests and type checks, builds with Vite, runs browser checks, copies `CNAME` into `dist/`, and deploys the compiled output.
 
 In **Settings → Pages → Build and deployment**, set **Source** to **GitHub Actions**. Publishing the repository directly with Jekyll serves uncompiled TypeScript and can result in a blank page.
 
@@ -110,3 +127,4 @@ Built with React, TypeScript, Vite, Three.js, and Tailwind CSS.
 ## Solar model
 
 Dates and the timeline use UTC; city time readouts use the city's time zone. Seasonal milestones are fixed calendar benchmarks, not calculated astronomical event instants. Daily chart peaks are sampled from altitude curves. Annual noon altitude range includes tropical zenith crossings and is shared by the globe and inspector.
+
