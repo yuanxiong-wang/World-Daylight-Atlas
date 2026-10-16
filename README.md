@@ -7,9 +7,10 @@ Explore sunlight around the world with an interactive 3D globe, a 2D daylight ma
 ## Features
 
 - **3D Earth:** procedural terrain textures, night lights, clouds, atmosphere, the daylight terminator, and twilight boundaries.
-- **City inspection:** choose from 45 built-in cities in the dock or click the globe to inspect a location. Selecting a city centers the globe camera on it.
+- **City inspection:** search cities worldwide with Open-Meteo geocoding, choose from 45 built-in cities offline, or click the globe to inspect a location. Selecting a city centers the globe camera on it.
 - **Sun trajectories:** inspect today's daylight and nighttime arcs, solar noon, sunrise, sunset, and the current Sun position.
 - **Seasonal comparisons:** March and September equinoxes and June and December solstices share the same milestone names, colors, and dates across the dock, globe, and inspector.
+- **Photography light:** golden-hour (−4° to +6° geometric Sun altitude) and blue-hour (−6° to −4°) windows, with the current simulation phase and city-local clock readouts.
 - **Local solar charts:** compare altitude curves, daily peaks, daylight duration, twilight times, and annual noon altitude range.
 - **UTC and local clocks:** the header and city comparison show the simulation instant in your device’s time zone beneath UTC, with matching typography and the UTC offset. Each comparison card also shows that city’s clock and date.
 - **Helix globe tour:** an optional scroll/swipe camera tour with vortex transitions and five latitude stops; normal atlas gestures stay unchanged.
@@ -37,12 +38,12 @@ npm run dev
 
 Open [localhost:3000](http://localhost:3000).
 
-The current app runs in the browser and does not require API keys. The variables in `.env.example` are retained from the original scaffold and are not used by the current app.
+The current app runs in the browser and does not require API keys. Worldwide search requires an Internet connection to Open-Meteo; built-in and already-selected session cities remain available without that request. The variables in `.env.example` are retained from the original scaffold and are not used by the current app.
 
 ## Controls
 
 - Drag the globe to orbit and scroll to zoom.
-- Select a city to center it, or click the Earth to inspect a custom observation point.
+- Select a city to center it, or click the Earth to inspect a custom observation point. In **Cities**, type at least two characters to search worldwide; results show region/country to distinguish matching names. Desktop selection closes the dock; mobile selection closes the sheet. Newly selected cities stay in the current session and work with sharing, calendars, charts, ground sky, and comparisons. In **Compare cities**, each card also has **Search worldwide** to replace that city directly.
 - Use **3D Sky Dome** to frame the selected location's solar trajectories.
 - Click a trajectory apex's pick area to jump to its sampled solar noon. Seasonal milestone buttons jump to the computed equinox/solstice instant in UTC; the date labels change with the year.
 - Open **Trajectory Chart** for local altitude curves and daylight comparisons.
@@ -120,6 +121,8 @@ src/
   types/                  Shared TypeScript models
   utils/
     solarCalculator.ts    Solar calculations and shared milestones
+    geocoding.ts          Validated Open-Meteo search results
+    photography.ts        Local-date golden/blue-hour windows
     lunarCalculator.ts    Ephemeris phase, illumination, and lunar event searches
     visibleFrameLoop.ts   Visibility-aware render scheduling
     earthTextures.ts      Procedural globe textures
@@ -155,6 +158,21 @@ The solar matrix covers London, Shanghai, Sydney, Seattle, Singapore, and Troms�
 These are tested tolerances for the listed samples, not a global accuracy guarantee. Near polar day/night transitions, atmospheric and horizon assumptions can dominate event timing. Twilight times, all intermediate lunar phases, and every day in the calendar have not received independent numerical accuracy bounds.
 
 Sources: [USNO Earth seasons](https://aa.usno.navy.mil/data/Earth_Seasons), [NASA phases 2001–2100](https://eclipse.gsfc.nasa.gov/phase/phase2001gmt.html), and [NASA phases 1901–2000](https://eclipse.gsfc.nasa.gov/phase/phase1901gmt.html).
+
+## Worldwide city search and photography light
+
+Worldwide city searches use the public [Open-Meteo Geocoding API](https://open-meteo.com/en/docs/geocoding-api), backed by [GeoNames](https://www.geonames.org/). Attribution links appear in every search picker. Typed queries (up to 100 characters) are sent directly from the browser to Open-Meteo after a 400 ms debounce, with a minimum of two characters. Requests omit credentials, cancel when the query changes or the picker unmounts, and time out after eight seconds. Successful queries have a bounded in-memory cache. No account or API key is needed for the public endpoint. Rate limits, network failures, retries, and empty results have explicit messages; saved-city search remains available. Results validate coordinates and the IANA time zone before selection.
+
+The app keeps up to 100 additionally selected locations in memory for the current session. They are not persisted to browser storage. Comparison-only search results stay in that comparison until selected with **View on globe**. Shared links retain the chosen coordinates and time zone. Neither the catalog nor the geocoder guarantees every settlement is indexed; try another spelling or a nearby city if no match is returned.
+
+**Photography light** appears in the desktop location card, mobile city details, trajectory inspector, and each comparison card. It uses these explicit definitions, which can differ from other photography apps:
+
+- **Golden hour:** geometric solar-center altitude from −4° through +6°.
+- **Blue hour:** geometric solar-center altitude from −6° through −4°.
+
+The date is the selected location’s local date, with time-zone and daylight-saving rules applied. Windows span the solar day centered on that date’s local solar noon, so they may continue across civil midnight. Clock readouts use the city’s time zone; a month/day prefix marks an endpoint on a different local date. A dagger (†) marks a window clipped at the solar-day boundary. Polar locations can have no windows or long continuous windows; these are not forced into invented morning/evening events. The current simulation altitude also identifies whether golden or blue hour is active.
+
+The implementation scans solar altitude every five minutes and refines detected threshold crossings by bisection. Tests check normal northern/southern windows, threshold altitudes, polar continuous/absent light, DST, and date-line zones. Very brief tangent windows near polar transitions can fall between samples. These photography windows have no independent event-time accuracy guarantee; clouds, terrain, atmospheric refraction, and local obstructions affect observed light.
 
 ## Rendering and motion
 

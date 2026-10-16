@@ -18,6 +18,7 @@ import {
 import { SubsolarPoint, GlobeLayerSettings, CityData, ViewMode, LunarPhaseType } from '../types';
 import { getSolarPosition, getSolarMilestones } from '../utils/solarCalculator';
 import { getLunarPhase } from '../utils/lunarCalculator';
+import { CitySearch } from './CitySearch';
 import { LocalClock } from './LocalClock';
 import { MoonPhaseBadge, MoonDiskSVG } from './MoonPhaseBadge';
 
@@ -64,7 +65,6 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<'timeline' | 'layers' | 'camera' | 'cities' | 'lunar'>('timeline');
-  const [citySearchQuery, setCitySearchQuery] = useState('');
 
   // Real-time Lunar Phase Calculation
   const lunarPhase = useMemo(() => getLunarPhase(currentDate), [currentDate]);
@@ -93,12 +93,6 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
   // Jump to the computed astronomical event instant.
   const handleJumpToSeason = (date: Date) => onUpdateDate(new Date(date));
 
-  // Filter cities by search
-  const filteredCities = cities.filter(
-    (c) =>
-      c.name.toLowerCase().includes(citySearchQuery.toLowerCase()) ||
-      c.country.toLowerCase().includes(citySearchQuery.toLowerCase())
-  );
 
   return (
     <>
@@ -600,53 +594,9 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
             )}
 
             {/* TAB 4: CITIES DIRECTORY */}
-            {activeTab === 'cities' && (
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  placeholder="Search city or country (e.g. Tokyo, London, Tromsø)..."
-                  value={citySearchQuery}
-                  onChange={(e) => setCitySearchQuery(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-slate-800/80 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-400 focus:outline-none focus:border-sky-500"
-                />
-
-                <div className="max-h-36 overflow-y-auto grid grid-cols-2 sm:grid-cols-4 gap-1.5 pr-1">
-                  {filteredCities.slice(0, 24).map((city) => {
-                    const isSelected = selectedCity?.id === city.id;
-                    const citySolar = getSolarPosition(city.lat, city.lng, currentDate);
-                    return (
-                      <button
-                        key={city.id}
-                        onClick={() => onSelectCity(city)}
-                        className={`text-left p-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                          isSelected
-                            ? 'bg-sky-600/30 border border-sky-500/80 text-white'
-                            : 'bg-slate-800/40 hover:bg-slate-800 text-slate-300 border border-transparent'
-                        }`}
-                      >
-                        <div className="truncate mr-1">
-                          <span className="font-medium block truncate">{city.name}</span>
-                          <span className="text-[10px] text-slate-400">{city.country.split(' ')[0]}</span>
-                        </div>
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-medium flex-shrink-0 ${
-                            citySolar.phase === 'day'
-                              ? 'bg-amber-400/20 text-amber-300'
-                              : citySolar.phase === 'golden-hour'
-                              ? 'bg-orange-500/20 text-orange-300'
-                              : citySolar.phase.includes('twilight')
-                              ? 'bg-sky-400/20 text-sky-300'
-                              : 'bg-slate-700 text-slate-300'
-                          }`}
-                        >
-                          {citySolar.elevation > 0 ? `+${citySolar.elevation.toFixed(0)}°` : `${citySolar.elevation.toFixed(0)}°`}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {activeTab === 'cities' && <CitySearch cities={cities} selectedId={selectedCity?.id} onSelect={city => {
+              onSelectCity(city); onChangeViewMode('3d-globe'); setIsCollapsed(true);
+            }} />}
 
             {/* TAB 5: LUNAR CYCLE & EPHEMERIS */}
             {activeTab === 'lunar' && (

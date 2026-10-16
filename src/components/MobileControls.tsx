@@ -5,6 +5,8 @@ import { getSolarPosition, getSolarTimes, getSolarMilestones } from '../utils/so
 import { getLunarPhase } from '../utils/lunarCalculator';
 import { formatDaylight } from '../utils/daylightCalendar';
 import { MoonDiskSVG } from './MoonPhaseBadge';
+import { CitySearch } from './CitySearch';
+import { PhotographyLight } from './PhotographyLight';
 import { LocalClock } from './LocalClock';
 import { Dialog } from './Dialog';
 
@@ -31,7 +33,6 @@ export function MobileControls({ reducedMotion, currentDate, cities, selectedCit
   onCameraPreset: (preset: string) => void; onOpenTool: (tool: MobileTool) => void;
 }) {
   const [sheet, setSheet] = useState<Sheet | null>(null);
-  const [search, setSearch] = useState('');
   const toolsRef = useRef<HTMLButtonElement>(null);
   const solar = selectedCity ? getSolarPosition(selectedCity.lat, selectedCity.lng, currentDate) : null;
   const times = useMemo(() => selectedCity ? getSolarTimes(selectedCity.lat, selectedCity.lng, currentDate) : null,
@@ -108,19 +109,9 @@ export function MobileControls({ reducedMotion, currentDate, cities, selectedCit
       </nav>
 
       {sheet && <Dialog title={titles[sheet]} placement="bottom" onClose={() => setSheet(null)}>
-        {sheet === 'cities' && <div className="space-y-3">
-          <label className="block text-sm text-slate-400">Search cities
-            <input value={search} onChange={event => setSearch(event.target.value)} placeholder="City or country"
-              className="block w-full mt-2 rounded-xl border border-slate-600 bg-slate-950 px-3 py-3 text-base" />
-          </label>
-          <div className="grid grid-cols-1 min-[480px]:grid-cols-2 gap-2">
-            {cities.filter(city => `${city.name} ${city.country}`.toLowerCase().includes(search.toLowerCase())).map(city => (
-              <button key={city.id} className={button} onClick={() => { onSelectCity(city); onChangeViewMode('3d-globe'); setSheet(null); }}>
-                <span className="block text-sky-300 font-medium">{city.name}</span><span className="text-xs text-slate-400">{city.country}</span>
-              </button>
-            ))}
-          </div>
-        </div>}
+        {sheet === 'cities' && <CitySearch cities={cities} selectedId={selectedCity?.id} onSelect={city => {
+          onSelectCity(city); onChangeViewMode('3d-globe'); setSheet(null);
+        }} />}
 
         {sheet === 'city' && selectedCity && solar && times && <div className="space-y-4">
           <p className="text-sm text-slate-400">{selectedCity.country} · {Math.abs(selectedCity.lat).toFixed(1)}°{selectedCity.lat >= 0 ? 'N' : 'S'}, {Math.abs(selectedCity.lng).toFixed(1)}°{selectedCity.lng >= 0 ? 'E' : 'W'}</p>
@@ -130,6 +121,7 @@ export function MobileControls({ reducedMotion, currentDate, cities, selectedCit
             <div><dt className="text-slate-400">Sunrise</dt><dd>{clock(times.sunrise)}</dd></div>
             <div><dt className="text-slate-400">Sunset</dt><dd>{clock(times.sunset)}</dd></div>
           </dl>
+          <PhotographyLight city={selectedCity} currentDate={currentDate} />
           <div className="grid grid-cols-2 gap-2">
             <button className={button} onClick={() => focus('focus-trajectory')}>3D Sky Dome</button>
             <button className={button} onClick={() => openTool('inspector')}>Trajectory chart</button>
