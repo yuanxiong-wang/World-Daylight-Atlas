@@ -175,45 +175,59 @@ function createAtmosphereMaterial(): THREE.ShaderMaterial {
   });
 }
 
-// Procedural Sprite Label generator for 3D annotations
-function createLabelSprite(text: string, color: string = '#fde047', bg: string = 'rgba(15, 23, 42, 0.85)'): THREE.Sprite {
+// Dispose transient annotations before rebuilding them during playback.
+function clearAnnotationGroup(group: THREE.Group) {
+  group.traverse(object => {
+    if (object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Sprite) {
+      if ('geometry' in object) object.geometry.dispose();
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      for (const material of materials) {
+        if ('map' in material && material.map instanceof THREE.Texture) material.map.dispose();
+        material.dispose();
+      }
+    }
+  });
+  group.clear();
+}
+
+// Measure before allocating the texture so long captions retain their full text.
+function createLabelSprite(
+  text: string,
+  color: string = '#fde047',
+  bg: string = 'rgba(15, 23, 42, 0.85)',
+  height: number = 1.625,
+): THREE.Sprite {
   const canvas = document.createElement('canvas');
-  canvas.width = 384;
-  canvas.height = 96;
   const ctx = canvas.getContext('2d')!;
+  const font = 'bold 36px "JetBrains Mono", monospace, sans-serif';
+  const padding = 24;
+  ctx.font = font;
+  const metrics = ctx.measureText(text);
+  const textWidth = Math.max(metrics.width,
+    (metrics.actualBoundingBoxLeft || 0) + (metrics.actualBoundingBoxRight || 0));
+  canvas.width = Math.ceil(textWidth + padding * 2);
+  canvas.height = 96;
 
-  // Background rounded badge
+  // Resizing a canvas resets its context, including the font.
+  ctx.font = font;
   ctx.fillStyle = bg;
-  const rad = 20;
   ctx.beginPath();
-  ctx.moveTo(rad, 0);
-  ctx.lineTo(384 - rad, 0);
-  ctx.quadraticCurveTo(384, 0, 384, rad);
-  ctx.lineTo(384, 96 - rad);
-  ctx.quadraticCurveTo(384, 96, 384 - rad, 96);
-  ctx.lineTo(rad, 96);
-  ctx.quadraticCurveTo(0, 96, 0, 96 - rad);
-  ctx.lineTo(0, rad);
-  ctx.quadraticCurveTo(0, 0, rad, 0);
-  ctx.closePath();
+  ctx.roundRect(2, 2, canvas.width - 4, canvas.height - 4, 18);
   ctx.fill();
-
   ctx.lineWidth = 3;
   ctx.strokeStyle = color;
   ctx.stroke();
 
-  // Text
   ctx.fillStyle = color;
-  ctx.font = 'bold 36px "JetBrains Mono", monospace, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, 192, 48);
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+  const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(6.5, 1.625, 1);
+  sprite.scale.set(height * canvas.width / canvas.height, height, 1);
   return sprite;
 }
 
@@ -509,6 +523,9 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
       window.removeEventListener('resize', handleResize);
       controls.dispose();
+      clearAnnotationGroup(sunTrajectoryGroup);
+      clearAnnotationGroup(citiesGroup);
+      trajectoryPicksRef.current.clear();
       renderer.dispose();
       textures.dayMap.dispose();
       textures.nightMap.dispose();
@@ -627,10 +644,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     trajectoryPicksRef.current.clear();
 
     // Clear previous trajectory objects
-    while (group.children.length > 0) {
-      const obj = group.children[0];
-      group.remove(obj);
-    }
+    clearAnnotationGroup(group);
 
     if (!selectedCity || !layers.showSunTrajectory) {
       group.visible = false;
@@ -709,9 +723,8 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       const tickMat = new THREE.LineBasicMaterial({ color: new THREE.Color(color) });
       group.add(new THREE.Line(tickGeo, tickMat));
 
-      const sprite = createLabelSprite(label, color, 'rgba(15, 23, 42, 0.6)');
+      const sprite = createLabelSprite(label, color, 'rgba(15, 23, 42, 0.6)', 1.4);
       sprite.position.copy(pObs.clone().addScaledVector(dir, R_DOME * 1.15));
-      sprite.scale.set(2.8, 1.4, 1);
       group.add(sprite);
     });
 
@@ -797,9 +810,8 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
         apex.position.copy(path.maxElevPt);
         group.add(apex);
         addPickTarget(path.maxElevPt, { date: path.maxElevDate, name: milestone.name });
-        const label = createLabelSprite(`${milestone.name} ${path.maxElev.toFixed(1)}°`, milestone.color);
+        const label = createLabelSprite(`${milestone.name} ${path.maxElev.toFixed(1)}°`, milestone.color, undefined, 1.375);
         label.position.copy(path.maxElevPt.clone().addScaledVector(up, 1.8));
-        label.scale.set(5.5, 1.375, 1);
         group.add(label);
       }
     }
@@ -981,10 +993,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     const group = citiesGroupRef.current;
     if (!group) return;
 
-    while (group.children.length > 0) {
-      const obj = group.children[0];
-      group.remove(obj);
-    }
+    clearAnnotationGroup(group);
 
     cities.forEach((city) => {
       const pos = latLngToVector3(city.lat, city.lng, EARTH_RADIUS + 0.2);
