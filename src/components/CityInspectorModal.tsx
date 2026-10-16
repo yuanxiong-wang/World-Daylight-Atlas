@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { CityData } from '../types';
-import { getSolarPosition, getSolarTimes } from '../utils/solarCalculator';
+import { getSolarPosition, getSolarTimes, getObserverSeasonalDates, getAnnualSolarAltitudeRange } from '../utils/solarCalculator';
 
 interface CityInspectorModalProps {
   city: CityData;
@@ -40,12 +40,16 @@ export const CityInspectorModal: React.FC<CityInspectorModalProps> = ({
   // Generate 24-hour elevation curve points for today
   const dailyCurve = useMemo(() => generate24hCurve(currentDate), [city, currentDate]);
 
+  const year = currentDate.getUTCFullYear();
+  const annualRange = useMemo(() => getAnnualSolarAltitudeRange(city.lat, year), [city.lat, year]);
+  const formatSeasonDate = (date: Date) => date.toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', timeZone: 'UTC',
+  });
+
   // Generate seasonal benchmark curves (Solstices & Equinox)
   const seasonalData = useMemo(() => {
     const year = currentDate.getUTCFullYear();
-    const summerDate = new Date(Date.UTC(year, 5, 21, 12, 0, 0));
-    const equinoxDate = new Date(Date.UTC(year, 2, 20, 12, 0, 0));
-    const winterDate = new Date(Date.UTC(year, 11, 21, 12, 0, 0));
+    const { summerDate, equinoxDate, winterDate } = getObserverSeasonalDates(year, city.lat);
 
     const summerCurve = generate24hCurve(summerDate);
     const equinoxCurve = generate24hCurve(equinoxDate);
@@ -60,6 +64,8 @@ export const CityInspectorModal: React.FC<CityInspectorModalProps> = ({
     const winterPeak = Math.max(...winterCurve.map((p) => p.elevation));
 
     return {
+      summerDate,
+      winterDate,
       summerCurve,
       equinoxCurve,
       winterCurve,
@@ -69,7 +75,6 @@ export const CityInspectorModal: React.FC<CityInspectorModalProps> = ({
       summerPeak,
       equinoxPeak,
       winterPeak,
-      deltaPeak: Math.max(0, summerPeak - winterPeak),
     };
   }, [city, currentDate]);
 
@@ -333,19 +338,19 @@ export const CityInspectorModal: React.FC<CityInspectorModalProps> = ({
                 {showSeasonalCurves && (
                   <>
                     <span className="flex items-center gap-1 text-amber-400">
-                      <span className="w-3 h-0.5 border-t border-amber-500 border-dashed inline-block"></span> Summer (Jun 21)
+                      <span className="w-3 h-0.5 border-t border-amber-500 border-dashed inline-block"></span> Summer ({formatSeasonDate(seasonalData.summerDate)})
                     </span>
                     <span className="flex items-center gap-1 text-emerald-400">
                       <span className="w-3 h-0.5 border-t border-emerald-500 border-dashed inline-block"></span> Equinox (Mar 20)
                     </span>
                     <span className="flex items-center gap-1 text-sky-400">
-                      <span className="w-3 h-0.5 border-t border-sky-400 border-dashed inline-block"></span> Winter (Dec 21)
+                      <span className="w-3 h-0.5 border-t border-sky-400 border-dashed inline-block"></span> Winter ({formatSeasonDate(seasonalData.winterDate)})
                     </span>
                   </>
                 )}
               </div>
               <span className="text-slate-400 font-mono">
-                Annual Swing: <strong className="text-amber-400">Δ {seasonalData.deltaPeak.toFixed(1)}°</strong>
+                Annual Swing: <strong className="text-amber-400">Δ {annualRange.range.toFixed(1)}°</strong>
               </span>
             </div>
           </div>
@@ -372,7 +377,7 @@ export const CityInspectorModal: React.FC<CityInspectorModalProps> = ({
                 <tbody className="divide-y divide-slate-800/60 text-slate-200">
                   <tr className="hover:bg-amber-500/5">
                     <td className="py-1 text-amber-300 font-semibold">☀️ Summer Solstice</td>
-                    <td className="py-1 text-slate-400">June 21</td>
+                    <td className="py-1 text-slate-400">{formatSeasonDate(seasonalData.summerDate)}</td>
                     <td className="py-1 text-right text-amber-400 font-bold">
                       {seasonalData.summerPeak > 0 ? `+${seasonalData.summerPeak.toFixed(1)}°` : `${seasonalData.summerPeak.toFixed(1)}°`}
                     </td>
@@ -392,7 +397,7 @@ export const CityInspectorModal: React.FC<CityInspectorModalProps> = ({
                   </tr>
                   <tr className="hover:bg-sky-500/5">
                     <td className="py-1 text-sky-300 font-semibold">❄️ Winter Solstice</td>
-                    <td className="py-1 text-slate-400">December 21</td>
+                    <td className="py-1 text-slate-400">{formatSeasonDate(seasonalData.winterDate)}</td>
                     <td className="py-1 text-right text-sky-400 font-bold">
                       {seasonalData.winterPeak > 0 ? `+${seasonalData.winterPeak.toFixed(1)}°` : `${seasonalData.winterPeak.toFixed(1)}°`}
                     </td>
@@ -444,3 +449,4 @@ export const CityInspectorModal: React.FC<CityInspectorModalProps> = ({
     </div>
   );
 };
+
