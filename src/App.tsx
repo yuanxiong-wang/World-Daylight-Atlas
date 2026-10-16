@@ -127,6 +127,7 @@ export default function App() {
           onUpdateLayers={updateLayers}
           activeCameraPreset={activeCameraPreset}
           onResetCameraPreset={() => setActiveCameraPreset(null)}
+          onTriggerCameraPreset={setActiveCameraPreset}
         />
       ) : (
         <Daylight2DMap
@@ -188,3 +189,4 @@ export default function App() {
     </div>
   );
 }
+

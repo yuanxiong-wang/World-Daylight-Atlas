@@ -2,24 +2,38 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   getAnnualSolarAltitudeRange,
-  getObserverSeasonalDates,
+  getSolarMilestones,
+  getDailySolarCurve,
   getSolarPosition,
   splitSolarPath,
 } from '../src/utils/solarCalculator.ts';
 
-test('season names follow the observer hemisphere', () => {
-  const north = getObserverSeasonalDates(2026, 51.5);
-  const south = getObserverSeasonalDates(2026, -33.8688);
-  assert.equal(north.summerDate.getUTCMonth(), 5);
-  assert.equal(north.winterDate.getUTCMonth(), 11);
-  assert.equal(south.summerDate.getUTCMonth(), 11);
-  assert.equal(south.winterDate.getUTCMonth(), 5);
-  const noonAltitude = date => {
-    const noon = new Date(date);
-    noon.setUTCHours(2, 0, 0, 0);
-    return getSolarPosition(-33.8688, 151.2093, noon).elevation;
-  };
-  assert.ok(noonAltitude(south.summerDate) - noonAltitude(south.winterDate) > 46);
+test('all four shared milestones have stable names, colors and UTC dates', () => {
+  const milestones = getSolarMilestones(2026);
+  assert.equal(new Set(milestones.map(m => m.id)).size, 4);
+  assert.deepEqual(milestones.map(m => m.name), [
+    'March Equinox', 'June Solstice', 'September Equinox', 'December Solstice',
+  ]);
+  for (const m of milestones) {
+    assert.match(m.color, /^#[0-9a-f]{6}$/);
+    assert.equal(m.date.getUTCFullYear(), 2026);
+    assert.equal(m.date.getUTCMonth(), m.month);
+    assert.equal(m.date.getUTCDate(), m.day);
+  }
+  // A consumer mutating its jump date must not alter another consumer's list.
+  milestones[0].date.setUTCFullYear(2000);
+  assert.equal(getSolarMilestones(2026)[0].date.getUTCFullYear(), 2026);
+});
+
+test('daily peak is independent of the simulation clock, even at night', () => {
+  const night = new Date('2026-06-21T00:00:00Z');
+  const morning = new Date('2026-06-21T09:00:00Z');
+  const nightCurve = getDailySolarCurve(51.5074, -0.1278, night);
+  const morningCurve = getDailySolarCurve(51.5074, -0.1278, morning);
+  assert.deepEqual(nightCurve, morningCurve);
+  const peak = Math.max(...nightCurve.map(p => p.elevation));
+  assert.ok(peak > 61 && peak < 63);
+  assert.ok(getSolarPosition(51.5074, -0.1278, night).elevation < 0);
 });
 
 test('Sydney and London retain the full annual noon altitude swing', () => {
