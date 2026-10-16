@@ -53,7 +53,7 @@ export default function App() {
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(300); // 5 min/sec by default for visible movement
   const [viewMode, setViewMode] = useState<ViewMode>(initialView?.view ?? '3d-globe');
   // Default to London (or first city) so the 3D sun trajectory sky dome is immediately visible!
-  const [selectedCity, setSelectedCity] = useState<CityData | null>(() => initialView ? initialView.city : WORLD_CITIES[6]);
+  const [selectedCity, setSelectedCity] = useState<CityData | null>(() => initialView ? initialView.city : WORLD_CITIES.find(city => city.id === 'london')!);
   const [isCityModalOpen, setIsCityModalOpen] = useState<boolean>(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState<boolean>(false);
   const [activeCameraPreset, setActiveCameraPreset] = useState<string | null>(() => window.matchMedia('(max-width: 1023px)').matches ? 'focus-city' : 'focus-trajectory');

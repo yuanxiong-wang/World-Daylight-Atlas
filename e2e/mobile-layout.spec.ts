@@ -38,14 +38,14 @@ for (const viewport of [
     await page.getByRole('button', { name: 'Cities', exact: true }).click();
     let sheet = page.getByRole('dialog');
     await expect(sheet.getByRole('heading', { name: 'Choose a city' })).toBeVisible();
-    await sheet.getByRole('textbox', { name: 'Search cities' }).fill('Tokyo');
-    await sheet.getByRole('button', { name: /Tokyo/ }).click();
+    await sheet.getByRole('textbox', { name: 'Search cities' }).fill('Seattle');
+    await sheet.getByRole('button', { name: /Seattle/ }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'City details for Tokyo' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'City details for Seattle' })).toBeVisible();
 
-    await page.getByRole('button', { name: 'City details for Tokyo' }).click();
+    await page.getByRole('button', { name: 'City details for Seattle' }).click();
     sheet = page.getByRole('dialog');
-    await expect(sheet.getByRole('heading', { name: 'Tokyo', exact: true })).toBeVisible();
+    await expect(sheet.getByRole('heading', { name: 'Seattle', exact: true })).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(1);
     await sheet.getByRole('button', { name: 'Close dialog' }).click();
 

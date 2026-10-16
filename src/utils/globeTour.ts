@@ -1,5 +1,5 @@
 /** A scroll-scrubbed route. Each leg makes one complete turn before the next stop. */
-export const TOUR_CITY_IDS = ['longyearbyen', 'london', 'singapore', 'sydney', 'ushuaia'];
+export const TOUR_CITY_IDS = ['tromso', 'london', 'singapore', 'sydney', 'ushuaia'];
 export const TOUR_NOTES = [
   'Above the Arctic Circle, summer can bring midnight Sun and winter can bring polar night.',
   'At mid latitudes, the Sun’s daily arc and daylight hours change markedly through the year.',

@@ -2,7 +2,6 @@ import { CityData } from '../types';
 
 export const WORLD_CITIES: CityData[] = [
   // Polar / Extreme Latitudes
-  { id: 'longyearbyen', name: 'Longyearbyen', country: 'Norway (Svalbard)', lat: 78.2232, lng: 15.6267, timezone: 'Europe/Oslo', population: 2400 },
   { id: 'tromso', name: 'Tromsø', country: 'Norway', lat: 69.6492, lng: 18.9553, timezone: 'Europe/Oslo', population: 77000 },
   { id: 'fairbanks', name: 'Fairbanks', country: 'United States (Alaska)', lat: 64.8378, lng: -147.7164, timezone: 'America/Anchorage', population: 32000 },
   { id: 'reykjavik', name: 'Reykjavík', country: 'Iceland', lat: 64.1466, lng: -21.9426, timezone: 'Atlantic/Reykjavik', population: 135000 },
@@ -21,17 +20,17 @@ export const WORLD_CITIES: CityData[] = [
 
   // Asia
   { id: 'tokyo', name: 'Tokyo', country: 'Japan', lat: 35.6762, lng: 139.6503, timezone: 'Asia/Tokyo', population: 13960000 },
-  { id: 'beijing', name: 'Beijing', country: 'China', lat: 39.9042, lng: 116.4074, timezone: 'Asia/Shanghai', population: 21540000 },
   { id: 'shanghai', name: 'Shanghai', country: 'China', lat: 31.2304, lng: 121.4737, timezone: 'Asia/Shanghai', population: 26320000 },
-  { id: 'hong-kong', name: 'Hong Kong', country: 'China', lat: 22.3193, lng: 114.1694, timezone: 'Asia/Hong_Kong', population: 7482000 },
   { id: 'singapore', name: 'Singapore', country: 'Singapore', lat: 1.3521, lng: 103.8198, timezone: 'Asia/Singapore', population: 5686000 },
   { id: 'mumbai', name: 'Mumbai', country: 'India', lat: 19.0760, lng: 72.8777, timezone: 'Asia/Kolkata', population: 20411000 },
-  { id: 'new-delhi', name: 'New Delhi', country: 'India', lat: 28.6139, lng: 77.2090, timezone: 'Asia/Kolkata', population: 31870000 },
   { id: 'bangkok', name: 'Bangkok', country: 'Thailand', lat: 13.7563, lng: 100.5018, timezone: 'Asia/Bangkok', population: 10539000 },
   { id: 'seoul', name: 'Seoul', country: 'South Korea', lat: 37.5665, lng: 126.9780, timezone: 'Asia/Seoul', population: 9776000 },
   { id: 'dubai', name: 'Dubai', country: 'United Arab Emirates', lat: 25.2048, lng: 55.2708, timezone: 'Asia/Dubai', population: 3331000 },
 
   // North America
+  { id: 'seattle', name: 'Seattle', country: 'United States', lat: 47.6062, lng: -122.3321, timezone: 'America/Los_Angeles', population: 737015 },
+  { id: 'dallas', name: 'Dallas', country: 'United States', lat: 32.7767, lng: -96.7970, timezone: 'America/Chicago', population: 1304379 },
+  { id: 'charlotte', name: 'Charlotte', country: 'United States', lat: 35.2271, lng: -80.8431, timezone: 'America/New_York', population: 874579 },
   { id: 'new-york', name: 'New York City', country: 'United States', lat: 40.7128, lng: -74.0060, timezone: 'America/New_York', population: 8336000 },
   { id: 'san-francisco', name: 'San Francisco', country: 'United States', lat: 37.7749, lng: -122.4194, timezone: 'America/Los_Angeles', population: 873965 },
   { id: 'los-angeles', name: 'Los Angeles', country: 'United States', lat: 34.0522, lng: -118.2437, timezone: 'America/Los_Angeles', population: 3979000 },
@@ -61,3 +60,4 @@ export const WORLD_CITIES: CityData[] = [
   { id: 'auckland', name: 'Auckland', country: 'New Zealand', lat: -36.8485, lng: 174.7633, timezone: 'Pacific/Auckland', population: 1657000 },
   { id: 'fiji', name: 'Suva', country: 'Fiji', lat: -18.1416, lng: 178.4419, timezone: 'Pacific/Fiji', population: 88271 },
 ];
+
