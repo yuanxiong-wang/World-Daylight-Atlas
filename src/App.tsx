@@ -38,7 +38,8 @@ export default function App() {
     requestAnimationFrame(() => {
       const previous = tourReturnFocus.current;
       if (previous?.isConnected) previous.focus();
-      else (document.querySelector('[data-testid="mobile-navigation"] button:last-child') as HTMLElement)?.focus();
+      else (document.querySelector(window.matchMedia('(min-width: 1024px)').matches
+        ? '[data-testid="desktop-tour-launch"]' : '[data-testid="mobile-navigation"] button:last-child') as HTMLElement)?.focus();
     });
   };
   const [initialView] = useState(() => readSharedView(window.location.hash));
@@ -205,7 +206,7 @@ export default function App() {
         currentDate={currentDate} onProgress={setTourProgress} onClose={closeTour} />}
       {tourProgress === null && <>
       <div className="hidden lg:flex absolute top-24 left-4 z-20 flex-wrap gap-2 max-w-[calc(100vw-2rem)]">
-        <button onClick={startTour} className="shrink-0 rounded-xl border border-sky-700 bg-slate-900/90 px-3 py-2 text-xs text-sky-300 cursor-pointer">Helix globe tour</button>
+        <button data-testid="desktop-tour-launch" onClick={startTour} className="shrink-0 rounded-xl border border-sky-700 bg-slate-900/90 px-3 py-2 text-xs text-sky-300 cursor-pointer">Helix globe tour</button>
         <button onClick={() => setShareUrl(createShareUrl(window.location.href, {
           date: currentDate, city: selectedCity, view: viewMode, layers,
         }))} className="shrink-0 whitespace-nowrap rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-sky-300 hover:bg-slate-800 cursor-pointer">
