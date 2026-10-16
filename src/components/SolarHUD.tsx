@@ -104,7 +104,7 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
   return (
     <>
       {/* Top Bar Header (Compact & Minimal) */}
-      <header className="absolute top-4 left-4 right-4 z-20 flex flex-wrap sm:flex-nowrap items-center justify-between pointer-events-none gap-2">
+      <header className="absolute top-4 left-4 right-4 z-20 hidden lg:flex items-center justify-between pointer-events-none gap-2">
         {/* Brand & Real-time Subsolar Metrics */}
         <div className="pointer-events-auto bg-slate-900/85 backdrop-blur-md border border-slate-700/80 rounded-xl px-3 sm:px-4 py-2.5 shadow-xl flex items-center gap-3 sm:gap-4 text-white w-full sm:w-auto min-w-0">
           <div className="flex items-center gap-2.5">
@@ -187,7 +187,7 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
 
       {/* Unified Bottom Control Dock (Adheres strictly to Three.js Ergonomic Bottom Dock Specification) */}
       <div
-        className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-30 w-full max-w-4xl px-4 transition-transform duration-300 ease-in-out ${
+        className={`hidden lg:block fixed bottom-5 left-1/2 -translate-x-1/2 z-30 w-full max-w-4xl px-4 transition-transform duration-300 ease-in-out ${
           isCollapsed ? 'translate-y-[calc(100%-38px)]' : 'translate-y-0'
         }`}
       >

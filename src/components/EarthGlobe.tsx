@@ -1116,7 +1116,16 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
         camera.position.copy(camPos);
         controls.target.copy(pObs);
       } else {
-        const targetPos = cityDir.clone().multiplyScalar(110);
+        let distance = 110;
+        if (window.matchMedia('(max-width: 1023px)').matches) {
+          const verticalHalfFov = camera.fov * Math.PI / 360;
+          const horizontalHalfFov = Math.atan(Math.tan(verticalHalfFov) * camera.aspect);
+          const visibleFraction = Math.max(0.4, (window.innerHeight - 180) / window.innerHeight);
+          distance = Math.max(distance,
+            EARTH_RADIUS / Math.sin(horizontalHalfFov) * 1.1,
+            EARTH_RADIUS / Math.sin(verticalHalfFov) * 1.1 / visibleFraction);
+        }
+        const targetPos = cityDir.clone().multiplyScalar(distance);
         camera.position.set(targetPos.x, targetPos.y, targetPos.z);
         controls.target.set(0, 0, 0);
       }
@@ -1150,13 +1159,14 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       {/* 3D WebGL Canvas Container */}
       <div
         ref={mountRef}
+        data-testid="globe-viewport"
         onPointerDown={handlePointerDown}
         className="w-full h-full cursor-grab active:cursor-grabbing"
       />
 
       {/* Selected Location / City Floating Panel with Interactive 3D Sun Path & Seasonal Controls */}
       {selectedCity && citySolar && (
-        <div className="absolute top-56 sm:top-20 right-6 z-20 pointer-events-auto bg-slate-900/92 backdrop-blur-md border border-slate-700/80 rounded-2xl p-4 shadow-2xl text-white w-80 max-w-[calc(100vw-3rem)] max-h-[calc(100vh-15rem)] sm:max-h-[calc(100vh-6rem)] overflow-y-auto transition-all">
+        <div data-testid="desktop-city-panel" className="hidden lg:block absolute top-20 right-6 z-20 pointer-events-auto bg-slate-900/92 backdrop-blur-md border border-slate-700/80 rounded-2xl p-4 shadow-2xl text-white w-80 max-w-[calc(100vw-3rem)] max-h-[calc(100vh-15rem)] sm:max-h-[calc(100vh-6rem)] overflow-y-auto transition-all">
           {/* Header */}
           <div className="flex items-start justify-between gap-3 mb-2.5">
             <div>

@@ -11,6 +11,8 @@ import { DaylightCalendar } from './components/DaylightCalendar';
 import { ShareViewDialog } from './components/ShareViewDialog';
 import { CompareCities } from './components/CompareCities';
 import { GroundSkyView } from './components/GroundSkyView';
+import { MobileControls } from './components/MobileControls';
+import type { MobileTool } from './components/MobileControls';
 import { createShareUrl, DEFAULT_LAYERS, readSharedView } from './utils/viewState';
 
 export default function App() {
@@ -28,7 +30,7 @@ export default function App() {
   const [selectedCity, setSelectedCity] = useState<CityData | null>(() => initialView ? initialView.city : WORLD_CITIES[6]);
   const [isCityModalOpen, setIsCityModalOpen] = useState<boolean>(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState<boolean>(false);
-  const [activeCameraPreset, setActiveCameraPreset] = useState<string | null>('focus-trajectory');
+  const [activeCameraPreset, setActiveCameraPreset] = useState<string | null>(() => window.matchMedia('(max-width: 1023px)').matches ? 'focus-city' : 'focus-trajectory');
 
   // Globe Layers configuration
   const [layers, setLayers] = useState<GlobeLayerSettings>(() => initialView?.layers ?? { ...DEFAULT_LAYERS });
@@ -132,8 +134,18 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleResetToNow]);
 
+  const openTool = (tool: MobileTool) => {
+    setIsPlaying(false);
+    if (tool === 'share') setShareUrl(createShareUrl(window.location.href, { date: currentDate, city: selectedCity, view: viewMode, layers }));
+    if (tool === 'calendar' && selectedCity) setIsCalendarOpen(true);
+    if (tool === 'compare') setIsComparisonOpen(true);
+    if (tool === 'sky' && selectedCity) setIsGroundSkyOpen(true);
+    if (tool === 'analytics') setIsAnalyticsOpen(true);
+    if (tool === 'inspector' && selectedCity) setIsCityModalOpen(true);
+  };
+
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-slate-950 font-sans text-slate-100 select-none">
+    <div className="relative w-screen h-dvh overflow-hidden bg-slate-950 font-sans text-slate-100 select-none">
       {/* 3D Globe or 2D Map View */}
       {viewMode === '3d-globe' ? (
         <EarthGlobe
@@ -160,7 +172,7 @@ export default function App() {
         />
       )}
 
-      <div className="absolute top-40 sm:top-24 left-4 z-20 flex sm:flex-wrap gap-2 max-w-[calc(100vw-2rem)] overflow-x-auto sm:overflow-visible">
+      <div className="hidden lg:flex absolute top-24 left-4 z-20 flex-wrap gap-2 max-w-[calc(100vw-2rem)]">
         <button onClick={() => setShareUrl(createShareUrl(window.location.href, {
           date: currentDate, city: selectedCity, view: viewMode, layers,
         }))} className="shrink-0 whitespace-nowrap rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-sky-300 hover:bg-slate-800 cursor-pointer">
@@ -204,6 +216,14 @@ export default function App() {
           setFollowLive(false);
           setIsPlaying(false);
         }} />}
+
+      <MobileControls currentDate={currentDate} cities={WORLD_CITIES} selectedCity={selectedCity}
+        layers={layers} viewMode={viewMode} isPlaying={isPlaying} playbackSpeed={playbackSpeed}
+        onSelectCity={handleSelectCity} onUpdateDate={date => {
+          setCurrentDate(date); setFollowLive(false); setIsPlaying(false);
+        }} onUpdateLayers={updateLayers} onChangeViewMode={setViewMode}
+        onTogglePlay={() => setIsPlaying(playing => !playing)} onChangeSpeed={setPlaybackSpeed}
+        onResetToNow={handleResetToNow} onCameraPreset={setActiveCameraPreset} onOpenTool={openTool} />
 
       {/* Ergonomic Collapsible Bottom Control Dock */}
       <SolarHUD

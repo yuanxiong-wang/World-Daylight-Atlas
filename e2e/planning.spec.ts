@@ -71,8 +71,9 @@ test('annual calendar fits a narrow screen and returns keyboard focus', async ({
     city: { id: 'london', name: 'London', country: 'UK', lat: 51.5, lng: 0, timezone: 'Europe/London' },
     view: '2d-map', layers: { ...DEFAULT_LAYERS },
   }), { waitUntil: 'domcontentloaded' });
-  const trigger = page.getByRole('button', { name: 'Annual daylight', exact: true });
+  const trigger = page.getByRole('button', { name: 'Tools', exact: true });
   await trigger.click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Annual daylight', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('button', { name: /^2024-/ })).toHaveCount(366);
   expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
