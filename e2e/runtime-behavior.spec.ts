@@ -48,7 +48,7 @@ test('reduced motion uses stepped playback and disables automatic rotation', asy
   await expect(rotation).toBeDisabled(); await expect(rotation).not.toBeChecked();
   await page.getByRole('button', { name: 'Close dialog' }).click();
   await page.getByRole('button', { name: 'Time', exact: true }).click();
-  await expect(page.getByText('Reduced motion: playback steps once per second; automatic rotation is off.')).toBeVisible();
+  await expect(page.getByRole('dialog').getByText('Reduced motion: playback steps once per second; automatic rotation is off.')).toBeVisible();
   await page.getByRole('button', { name: 'Close dialog' }).click();
   // Browser clock makes the absence of an animated playback loop deterministic.
   await page.clock.install();
