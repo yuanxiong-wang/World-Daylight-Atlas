@@ -5,12 +5,15 @@ import { SubsolarPoint, CityData, GlobeLayerSettings } from '../types';
 import { createEarthTextures, createStarfield } from '../utils/earthTextures';
 import { getSolarPosition, getSolarMilestones, getAnnualSolarAltitudeRange, splitSolarPath } from '../utils/solarCalculator';
 
+import { sampleTour } from '../utils/globeTour';
+
 interface SolarPickPayload {
   date: Date;
   name: string;
 }
 
 interface EarthGlobeProps {
+  tour?: { progress: number; stops: CityData[]; reducedMotion: boolean } | null;
   currentDate: Date;
   subsolarPoint: SubsolarPoint;
   cities: CityData[];
@@ -233,6 +236,7 @@ function createLabelSprite(
 }
 
 export const EarthGlobe: React.FC<EarthGlobeProps> = ({
+  tour = null,
   currentDate,
   subsolarPoint,
   cities,
@@ -246,6 +250,8 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
   onResetCameraPreset,
   onTriggerCameraPreset,
 }) => {
+  const tourRef = useRef(tour);
+  tourRef.current = tour;
   const trajectoryPicksRef = useRef(new Map<THREE.Object3D, SolarPickPayload>());
   const activePointersRef = useRef(new Set<number>());
   const tapStartRef = useRef<{ id: number; x: number; y: number } | null>(null);
@@ -336,484 +342,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
 
     // 7c. Subsolar Latitude Parallel Ring (daily latitude of the sun)
     const subsolarLatGeo = new THREE.BufferGeometry();
-    const subLatPts: THREE.Vector3[] = [];
-    for (let lon = -180; lon <= 180; lon += 3) {
-      subLatPts.push(latLngToVector3(0, lon, EARTH_RADIUS + 0.15));
-    }
-    subsolarLatGeo.setFromPoints(subLatPts);
-    const subsolarLatMat = new THREE.LineDashedMaterial({
-      color: 0xf59e0b,
-      dashSize: 2,
-      gapSize: 2,
-      transparent: true,
-      opacity: 0.7,
-    });
-    const subsolarLatRing = new THREE.Line(subsolarLatGeo, subsolarLatMat);
-    subsolarLatRing.computeLineDistances();
-    subsolarLatitudeRingRef.current = subsolarLatRing;
-    scene.add(subsolarLatRing);
-
-    // 8. Atmospheric Halo Shell
-    const atmosphereGeometry = new THREE.SphereGeometry(EARTH_RADIUS * 1.15, 64, 48);
-    const atmosphereMaterial = createAtmosphereMaterial();
-    atmosphereMatRef.current = atmosphereMaterial;
-    const atmosphereMesh = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
-    atmosphereMeshRef.current = atmosphereMesh;
-    scene.add(atmosphereMesh);
-
-    // 9. Subsolar Point Marker (Solar Zenith Beacon)
-    const subsolarGroup = new THREE.Group();
-    // Inner pulse ring
-    const ringGeo = new THREE.RingGeometry(1.2, 1.8, 32);
-    const ringMat = new THREE.MeshBasicMaterial({ color: 0xffdd44, side: THREE.DoubleSide });
-    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-    subsolarGroup.add(ringMesh);
-
-    // Center bright dot
-    const dotGeo = new THREE.SphereGeometry(0.8, 16, 16);
-    const dotMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const dotMesh = new THREE.Mesh(dotGeo, dotMat);
-    subsolarGroup.add(dotMesh);
-
-    // Zenith normal light ray pointer
-    const rayGeo = new THREE.CylinderGeometry(0.15, 0.4, 18, 16);
-    rayGeo.translate(0, 9, 0);
-    const rayMat = new THREE.MeshBasicMaterial({ color: 0xffea00, transparent: true, opacity: 0.85 });
-    const rayMesh = new THREE.Mesh(rayGeo, rayMat);
-    rayMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1));
-    subsolarGroup.add(rayMesh);
-
-    subsolarMarkerRef.current = subsolarGroup;
-    scene.add(subsolarGroup);
-
-    // Sun incoming radiation line (from deep space to subsolar point)
-    const beamGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0, 0, 120),
-    ]);
-    const beamMat = new THREE.LineDashedMaterial({
-      color: 0xffdd44,
-      dashSize: 3,
-      gapSize: 2,
-      transparent: true,
-      opacity: 0.7,
-    });
-    const sunBeam = new THREE.Line(beamGeo, beamMat);
-    sunBeam.computeLineDistances();
-    sunBeamRef.current = sunBeam;
-    scene.add(sunBeam);
-
-    // 10. Terminator Line (Great Circle separating Day and Night)
-    const terminatorGeo = new THREE.BufferGeometry();
-    const termPoints: THREE.Vector3[] = [];
-    const NUM_TERM_STEPS = 180;
-    for (let i = 0; i <= NUM_TERM_STEPS; i++) {
-      termPoints.push(new THREE.Vector3());
-    }
-    terminatorGeo.setFromPoints(termPoints);
-    const terminatorMat = new THREE.LineBasicMaterial({
-      color: 0x38bdf8,
-      linewidth: 2,
-      transparent: true,
-      opacity: 0.9,
-    });
-    const terminatorLine = new THREE.LineLoop(terminatorGeo, terminatorMat);
-    terminatorLineRef.current = terminatorLine;
-    scene.add(terminatorLine);
-
-    // 11. Twilight Bands Group (Civil -6°, Nautical -12°, Astronomical -18°)
-    const twilightGroup = new THREE.Group();
-    const twilightColors = [0x60a5fa, 0x818cf8, 0xa78bfa];
-    for (let t = 0; t < 3; t++) {
-      const twGeo = new THREE.BufferGeometry();
-      const twPts: THREE.Vector3[] = [];
-      for (let i = 0; i <= NUM_TERM_STEPS; i++) twPts.push(new THREE.Vector3());
-      twGeo.setFromPoints(twPts);
-      const twMat = new THREE.LineLoop(
-        twGeo,
-        new THREE.LineBasicMaterial({
-          color: twilightColors[t],
-          transparent: true,
-          opacity: 0.5 - t * 0.12,
-        })
-      );
-      twilightGroup.add(twMat);
-    }
-    twilightLinesGroupRef.current = twilightGroup;
-    scene.add(twilightGroup);
-
-    // 12. Cities 3D Markers Group
-    const citiesGroup = new THREE.Group();
-    citiesGroupRef.current = citiesGroup;
-    scene.add(citiesGroup);
-
-    // 13. Graticule Lat/Lon Wireframe Group
-    const graticuleGroup = new THREE.Group();
-    const graticuleMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.08 });
-    
-    // Parallels every 30 degrees + Tropics and Polar circles
-    const parallels = [-66.56, -60, -30, -23.44, 0, 23.44, 30, 60, 66.56];
-    parallels.forEach((lat) => {
-      const pGeo = new THREE.BufferGeometry();
-      const pts: THREE.Vector3[] = [];
-      for (let lon = -180; lon <= 180; lon += 5) {
-        pts.push(latLngToVector3(lat, lon, EARTH_RADIUS + 0.1));
-      }
-      pGeo.setFromPoints(pts);
-      const isSpecial = Math.abs(lat) === 23.44 || Math.abs(lat) === 66.56 || lat === 0;
-      const mat = isSpecial
-        ? new THREE.LineBasicMaterial({
-            color: lat === 0 ? 0x22c55e : 0xf59e0b,
-            transparent: true,
-            opacity: 0.25,
-          })
-        : graticuleMat;
-      graticuleGroup.add(new THREE.Line(pGeo, mat));
-    });
-
-    // Meridians every 30 degrees
-    for (let lon = -180; lon < 180; lon += 30) {
-      const mGeo = new THREE.BufferGeometry();
-      const pts: THREE.Vector3[] = [];
-      for (let lat = -90; lat <= 90; lat += 3) {
-        pts.push(latLngToVector3(lat, lon, EARTH_RADIUS + 0.1));
-      }
-      mGeo.setFromPoints(pts);
-      const mat = lon === 0
-        ? new THREE.LineBasicMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.35 })
-        : graticuleMat;
-      graticuleGroup.add(new THREE.Line(mGeo, mat));
-    }
-    graticuleGroupRef.current = graticuleGroup;
-    scene.add(graticuleGroup);
-
-    // Resize handler
-    const handleResize = () => {
-      if (!container || !rendererRef.current || !cameraRef.current) return;
-      const w = container.clientWidth;
-      const h = container.clientHeight;
-      cameraRef.current.aspect = w / h;
-      cameraRef.current.updateProjectionMatrix();
-      rendererRef.current.setSize(w, h);
-    };
-    window.addEventListener('resize', handleResize);
-
-    // Pre-warm renderer shaders
-    renderer.compile(scene, camera);
-
-    // Animation Loop
-    let lastTime = performance.now();
-    let cloudOffset = 0;
-
-    const animate = (time: number) => {
-      const delta = (time - lastTime) / 1000;
-      lastTime = time;
-
-      // Drift clouds slowly
-      cloudOffset += delta * 0.002;
-      if (earthMatRef.current) {
-        earthMatRef.current.uniforms.uCloudOffset.value = cloudOffset;
-      }
-
-      controls.update();
-      renderer.render(scene, camera);
-      animFrameIdRef.current = requestAnimationFrame(animate);
-    };
-
-    animFrameIdRef.current = requestAnimationFrame(animate);
-
-    return () => {
-      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
-      window.removeEventListener('resize', handleResize);
-      controls.dispose();
-      clearAnnotationGroup(sunTrajectoryGroup);
-      clearAnnotationGroup(citiesGroup);
-      trajectoryPicksRef.current.clear();
-      renderer.dispose();
-      textures.dayMap.dispose();
-      textures.nightMap.dispose();
-      textures.specularMap.dispose();
-      textures.cloudMap.dispose();
-      earthGeometry.dispose();
-      atmosphereGeometry.dispose();
-    };
-  }, []);
-
-  // Update Sun Direction & Subsolar Marker whenever subsolarPoint changes
-  useEffect(() => {
-    if (!subsolarPoint || !sceneRef.current) return;
-
-    // Subsolar vector in world space
-    const sunPos = latLngToVector3(subsolarPoint.lat, subsolarPoint.lng, EARTH_RADIUS);
-    const sunDirection = sunPos.clone().normalize();
-
-    // 1. Update Earth Shader Sun Direction
-    if (earthMatRef.current) {
-      earthMatRef.current.uniforms.uSunDirection.value.copy(sunDirection);
-    }
-    if (atmosphereMatRef.current) {
-      atmosphereMatRef.current.uniforms.uSunDirection.value.copy(sunDirection);
-    }
-
-    // 2. Position Subsolar Beacon on Earth surface
-    if (subsolarMarkerRef.current) {
-      subsolarMarkerRef.current.position.copy(sunPos);
-      subsolarMarkerRef.current.quaternion.setFromUnitVectors(
-        new THREE.Vector3(0, 0, 1),
-        sunDirection
-      );
-    }
-
-    // 3. Update incoming Sun Beam
-    if (sunBeamRef.current) {
-      const farSunPoint = sunDirection.clone().multiplyScalar(EARTH_RADIUS * 2.8);
-      const points = [sunPos.clone().multiplyScalar(1.02), farSunPoint];
-      sunBeamRef.current.geometry.setFromPoints(points);
-      sunBeamRef.current.computeLineDistances();
-    }
-
-    // 4. Update 3D Terminator Great Circle
-    // The terminator is a great circle 90 degrees away from the subsolar vector
-    if (terminatorLineRef.current) {
-      // Find two orthogonal basis vectors perpendicular to sunDirection
-      const arb = Math.abs(sunDirection.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
-      const u = new THREE.Vector3().crossVectors(sunDirection, arb).normalize();
-      const v = new THREE.Vector3().crossVectors(sunDirection, u).normalize();
-
-      const termPts: THREE.Vector3[] = [];
-      const steps = 180;
-      const termRadius = EARTH_RADIUS + 0.15;
-
-      for (let i = 0; i <= steps; i++) {
-        const angle = (i / steps) * Math.PI * 2;
-        // Point on terminator great circle
-        const p = new THREE.Vector3()
-          .addScaledVector(u, Math.cos(angle))
-          .addScaledVector(v, Math.sin(angle))
-          .multiplyScalar(termRadius);
-        termPts.push(p);
-      }
-      terminatorLineRef.current.geometry.setFromPoints(termPts);
-    }
-
-    // 5. Update Twilight Circles (Civil: 96°, Nautical: 102°, Astronomical: 108°)
-    if (twilightLinesGroupRef.current) {
-      const arb = Math.abs(sunDirection.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
-      const u = new THREE.Vector3().crossVectors(sunDirection, arb).normalize();
-      const v = new THREE.Vector3().crossVectors(sunDirection, u).normalize();
-      const steps = 180;
-
-      const twilightAngles = [96 * (Math.PI / 180), 102 * (Math.PI / 180), 108 * (Math.PI / 180)];
-      twilightLinesGroupRef.current.children.forEach((child, idx) => {
-        const line = child as THREE.LineLoop;
-        const theta = twilightAngles[idx];
-        const ringRadius = EARTH_RADIUS * Math.sin(theta);
-        const ringDistance = EARTH_RADIUS * Math.cos(theta);
-        const pts: THREE.Vector3[] = [];
-
-        for (let i = 0; i <= steps; i++) {
-          const angle = (i / steps) * Math.PI * 2;
-          const p = sunDirection.clone().multiplyScalar(ringDistance)
-            .addScaledVector(u, Math.cos(angle) * ringRadius)
-            .addScaledVector(v, Math.sin(angle) * ringRadius);
-          p.normalize().multiplyScalar(EARTH_RADIUS + 0.12 + idx * 0.05);
-          pts.push(p);
-        }
-        line.geometry.setFromPoints(pts);
-      });
-    }
-
-    // 6. Update Subsolar Latitude Parallel Ring (Daily Path of Zenith Sun)
-    if (subsolarLatitudeRingRef.current) {
-      const subLatPts: THREE.Vector3[] = [];
-      for (let lon = -180; lon <= 180; lon += 2) {
-        subLatPts.push(latLngToVector3(subsolarPoint.declination, lon, EARTH_RADIUS + 0.15));
-      }
-      subsolarLatitudeRingRef.current.geometry.setFromPoints(subLatPts);
-      subsolarLatitudeRingRef.current.computeLineDistances();
-    }
-  }, [subsolarPoint]);
-
-  // Build / Update 3D Sun Trajectory Across The Sky Overlay for Selected Location
-  const solarYear = currentDate.getUTCFullYear();
-  const observerLatitude = selectedCity?.lat;
-  const annualRange = useMemo(() => observerLatitude === undefined ? null :
-    getAnnualSolarAltitudeRange(observerLatitude, solarYear), [observerLatitude, solarYear]);
-
-  useEffect(() => {
-    const group = sunTrajectoryGroupRef.current;
-    if (!group) return;
-
-    trajectoryPicksRef.current.clear();
-
-    // Clear previous trajectory objects
-    clearAnnotationGroup(group);
-
-    if (!selectedCity || !layers.showSunTrajectory) {
-      group.visible = false;
-      return;
-    }
-
-    group.visible = true;
-
-    const addPickTarget = (position: THREE.Vector3, payload: SolarPickPayload) => {
-      const target = new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 8),
-        new THREE.MeshBasicMaterial({ visible: false }));
-      target.position.copy(position);
-      group.add(target);
-      trajectoryPicksRef.current.set(target, payload);
-    };
-
-    // 1. Observer position on Earth surface
-    const pObs = latLngToVector3(selectedCity.lat, selectedCity.lng, EARTH_RADIUS + 0.08);
-
-    // 2. Local Orthonormal Basis at Observer Location
-    const up = pObs.clone().normalize();
-    const worldAxis = Math.abs(up.y) < 0.999 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, -1);
-    const northUnnorm = worldAxis.clone().sub(up.clone().multiplyScalar(worldAxis.dot(up)));
-    const north = northUnnorm.normalize();
-    const east = new THREE.Vector3().crossVectors(north, up).normalize();
-
-    // Local Sky Dome Radius
-    const R_DOME = 15.0;
-
-    // 3. Local Horizon Plane Disc & Ring
-    const horizonPts: THREE.Vector3[] = [];
-    const NUM_HORIZ_STEPS = 96;
-    for (let i = 0; i <= NUM_HORIZ_STEPS; i++) {
-      const angle = (i / NUM_HORIZ_STEPS) * Math.PI * 2;
-      const hPt = pObs.clone()
-        .addScaledVector(north, Math.cos(angle) * R_DOME)
-        .addScaledVector(east, Math.sin(angle) * R_DOME);
-      horizonPts.push(hPt);
-    }
-
-    const horizonLineGeo = new THREE.BufferGeometry().setFromPoints(horizonPts);
-    const horizonLineMat = new THREE.LineBasicMaterial({
-      color: 0x38bdf8,
-      transparent: true,
-      opacity: 0.85,
-    });
-    group.add(new THREE.LineLoop(horizonLineGeo, horizonLineMat));
-
-    // Semi-transparent Horizon Disk
-    const diskGeo = new THREE.CircleGeometry(R_DOME, 48);
-    const diskMat = new THREE.MeshBasicMaterial({
-      color: 0x0284c7,
-      transparent: true,
-      opacity: 0.12,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-    const diskMesh = new THREE.Mesh(diskGeo, diskMat);
-    diskMesh.position.copy(pObs);
-    // Align circle normal (Z) with up
-    diskMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), up);
-    group.add(diskMesh);
-
-    // Cardinal Direction Ticks (N, E, S, W)
-    const cardinalDirs = [
-      { dir: north, label: 'N', color: '#38bdf8' },
-      { dir: east, label: 'E', color: '#f59e0b' },
-      { dir: north.clone().negate(), label: 'S', color: '#94a3b8' },
-      { dir: east.clone().negate(), label: 'W', color: '#f59e0b' },
-    ];
-
-    cardinalDirs.forEach(({ dir, label, color }) => {
-      const tickStart = pObs.clone().addScaledVector(dir, R_DOME * 0.92);
-      const tickEnd = pObs.clone().addScaledVector(dir, R_DOME * 1.05);
-      const tickGeo = new THREE.BufferGeometry().setFromPoints([tickStart, tickEnd]);
-      const tickMat = new THREE.LineBasicMaterial({ color: new THREE.Color(color) });
-      group.add(new THREE.Line(tickGeo, tickMat));
-
-      const sprite = createLabelSprite(label, color, 'rgba(15, 23, 42, 0.6)', 1.4);
-      sprite.position.copy(pObs.clone().addScaledVector(dir, R_DOME * 1.15));
-      group.add(sprite);
-    });
-
-    // 4. Diurnal Sun Path Generator
-    const computeDiurnalPath = (date: Date, numSamples = 72) => {
-      const allPts: { pt: THREE.Vector3; elev: number; az: number; date: Date }[] = [];
-
-      const bDate = new Date(date);
-      bDate.setUTCHours(0, 0, 0, 0);
-
-      let maxElev = -90;
-      let maxElevPt = pObs.clone();
-      let maxElevDate = date;
-
-      for (let i = 0; i <= numSamples; i++) {
-        const sampleTime = new Date(bDate.getTime() + (i / numSamples) * 86400000);
-        const pos = getSolarPosition(selectedCity.lat, selectedCity.lng, sampleTime);
-        const elRad = pos.elevation * (Math.PI / 180);
-        const azRad = pos.azimuth * (Math.PI / 180);
-
-        const localDir = new THREE.Vector3()
-          .addScaledVector(north, Math.cos(elRad) * Math.cos(azRad))
-          .addScaledVector(east, Math.cos(elRad) * Math.sin(azRad))
-          .addScaledVector(up, Math.sin(elRad));
-
-        const pt = pObs.clone().addScaledVector(localDir, R_DOME);
-        allPts.push({ pt, elev: pos.elevation, az: pos.azimuth, date: sampleTime });
-
-        if (pos.elevation > maxElev) {
-          maxElev = pos.elevation;
-          maxElevPt = pt;
-          maxElevDate = sampleTime;
-        }
-      }
-
-      // Horizon crossing points (Sunrise & Sunset)
-      let sunrisePt: THREE.Vector3 | null = null;
-      let sunsetPt: THREE.Vector3 | null = null;
-      for (let i = 0; i < allPts.length - 1; i++) {
-        const p1 = allPts[i];
-        const p2 = allPts[i + 1];
-        if (p1.elev < 0 && p2.elev >= 0) {
-          sunrisePt = p1.pt.clone().lerp(p2.pt, -p1.elev / (p2.elev - p1.elev));
-        } else if (p1.elev >= 0 && p2.elev < 0) {
-          sunsetPt = p1.pt.clone().lerp(p2.pt, p1.elev / (p1.elev - p2.elev));
-        }
-      }
-
-      const { daySegments, nightSegments } = splitSolarPath(allPts);
-      return {
-        daySegments: daySegments.filter(segment => segment.length >= 2).map(segment => segment.map(sample => sample.pt)),
-        nightSegments: nightSegments.filter(segment => segment.length >= 2).map(segment => segment.map(sample => sample.pt)),
-        allPts,
-        maxElev,
-        maxElevPt,
-        maxElevDate,
-        sunrisePt,
-        sunsetPt,
-      };
-    };
-
-    // Calculate Today's Solar Path
-    const todayPath = computeDiurnalPath(currentDate, 96);
-
-    // Four shared benchmarks; every milestone has one typed pick target.
-    if (layers.showSeasonalPaths) {
-      for (const milestone of getSolarMilestones(currentDate.getUTCFullYear())) {
-        const path = computeDiurnalPath(milestone.date, 72);
-        for (const points of path.daySegments) {
-          const curve = new THREE.CatmullRomCurve3(points, false);
-          group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.18, 8, false),
-            new THREE.MeshBasicMaterial({ color: milestone.color, transparent: true, opacity: 0.9 })));
-        }
-        for (const points of path.nightSegments) {
-          const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),
-            new THREE.LineDashedMaterial({ color: milestone.color, dashSize: 0.8, gapSize: 0.8,
-              transparent: true, opacity: 0.35 }));
-          line.computeLineDistances();
-          group.add(line);
-        }
-        const apex = new THREE.Mesh(new THREE.SphereGeometry(0.65, 16, 16),
-          new THREE.MeshBasicMaterial({ color: milestone.color }));
-        apex.position.copy(path.maxElevPt);
-        group.add(apex);
-        addPickTarget(path.maxElevPt, { date: path.maxElevDate, name: milestone.name });
-        const label = createLabelSprite(`${milestone.name} ${path.maxElev.toFixed(1)}°`, milestone.color, undefined, 1.375);
+    const subLatPts: THREE.Vector3[…4947 tokens truncated…milestone.name} ${path.maxElev.toFixed(1)}°`, milestone.color, undefined, 1.375);
         label.position.copy(path.maxElevPt.clone().addScaledVector(up, 1.8));
         group.add(label);
       }
@@ -1089,7 +618,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
 
   // Smooth Camera Presets
   useEffect(() => {
-    if (!activeCameraPreset || !cameraRef.current || !controlsRef.current) return;
+    if (tour || !activeCameraPreset || !cameraRef.current || !controlsRef.current) return;
     const camera = cameraRef.current;
     const controls = controlsRef.current;
 
@@ -1135,7 +664,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
 
     controls.update();
     onResetCameraPreset();
-  }, [activeCameraPreset, subsolarPoint, selectedCity, onResetCameraPreset]);
+  }, [tour, activeCameraPreset, subsolarPoint, selectedCity, onResetCameraPreset]);
 
   // Compute selected city's current solar data
   const citySolar = selectedCity ? getSolarPosition(selectedCity.lat, selectedCity.lng, currentDate) : null;
@@ -1187,7 +716,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
 
       {/* Selected Location / City Floating Panel with Interactive 3D Sun Path & Seasonal Controls */}
       {selectedCity && citySolar && (
-        <div data-testid="desktop-city-panel" className="hidden lg:block absolute top-20 right-6 z-20 pointer-events-auto bg-slate-900/92 backdrop-blur-md border border-slate-700/80 rounded-2xl p-4 shadow-2xl text-white w-80 max-w-[calc(100vw-3rem)] max-h-[calc(100vh-15rem)] sm:max-h-[calc(100vh-6rem)] overflow-y-auto transition-all">
+        <div data-testid="desktop-city-panel" style={tour ? { display: 'none' } : undefined} className="hidden lg:block absolute top-20 right-6 z-20 pointer-events-auto bg-slate-900/92 backdrop-blur-md border border-slate-700/80 rounded-2xl p-4 shadow-2xl text-white w-80 max-w-[calc(100vw-3rem)] max-h-[calc(100vh-15rem)] sm:max-h-[calc(100vh-6rem)] overflow-y-auto transition-all">
           {/* Header */}
           <div className="flex items-start justify-between gap-3 mb-2.5">
             <div>

@@ -128,3 +128,9 @@ Built with React, TypeScript, Vite, Three.js, and Tailwind CSS.
 
 Dates and the timeline use UTC; city time readouts use the city's time zone. Seasonal milestones are fixed calendar benchmarks, not calculated astronomical event instants. Daily chart peaks are sampled from altitude curves. Annual noon altitude range includes tropical zenith crossings and is shared by the globe and inspector.
 
+
+### Scroll-driven globe tour
+
+Choose **Helix globe tour** from the desktop toolbar or **Tools** on mobile. Scroll or swipe to move the camera along a spiral around Earth, visiting Longyearbyen, London, Singapore, Sydney, and Ushuaia. Vortex rings build during travel and clear at each stop. Each stop explains its latitude’s daylight pattern and shows daylight hours and Sun altitude for the simulation date, which stays fixed during the tour.
+
+Use **Previous stop**, **Next stop**, the progress slider, arrow/Page keys, or Home/End to navigate. **Exit tour** or Escape returns to your selected city. The tour replaces the regular controls while open; scrolling elsewhere in the app is unchanged. With your system’s reduced-motion preference enabled, it uses discrete city views without orbital spins or vortex effects.
