@@ -9,6 +9,8 @@ import { DaylightAnalytics } from './components/DaylightAnalytics';
 import { CityInspectorModal } from './components/CityInspectorModal';
 import { DaylightCalendar } from './components/DaylightCalendar';
 import { ShareViewDialog } from './components/ShareViewDialog';
+import { CompareCities } from './components/CompareCities';
+import { GroundSkyView } from './components/GroundSkyView';
 import { createShareUrl, DEFAULT_LAYERS, readSharedView } from './utils/viewState';
 
 export default function App() {
@@ -17,6 +19,8 @@ export default function App() {
   const [followLive, setFollowLive] = useState(!initialView);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isComparisonOpen, setIsComparisonOpen] = useState(false);
+  const [isGroundSkyOpen, setIsGroundSkyOpen] = useState(false);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(300); // 5 min/sec by default for visible movement
   const [viewMode, setViewMode] = useState<ViewMode>(initialView?.view ?? '3d-globe');
@@ -46,6 +50,8 @@ export default function App() {
       setIsPlaying(false);
       setActiveCameraPreset(state.city ? 'focus-city' : null);
       setIsCalendarOpen(false);
+      setIsComparisonOpen(false);
+      setIsGroundSkyOpen(false);
       setShareUrl(null);
     };
     window.addEventListener('hashchange', restore);
@@ -105,6 +111,8 @@ export default function App() {
   // Keyboard navigation shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Keep native keyboard controls working inside dialogs.
+      if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return;
       // Ignore if user is typing in search input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
@@ -163,6 +171,15 @@ export default function App() {
           className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-amber-300 hover:bg-slate-800 disabled:opacity-40 cursor-pointer">
           Annual daylight
         </button>
+        <button onClick={() => { setIsPlaying(false); setIsComparisonOpen(true); }}
+          className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-violet-300 hover:bg-slate-800 cursor-pointer">
+          Compare cities
+        </button>
+        <button disabled={!selectedCity} onClick={() => { setIsPlaying(false); setIsGroundSkyOpen(true); }}
+          title={selectedCity ? `Sky seen from ${selectedCity.name}` : 'Select a city first'}
+          className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-emerald-300 hover:bg-slate-800 disabled:opacity-40 cursor-pointer">
+          Ground-level sky
+        </button>
       </div>
       {shareUrl && <ShareViewDialog url={shareUrl} onClose={() => setShareUrl(null)} />}
       {isCalendarOpen && selectedCity && <DaylightCalendar city={selectedCity} currentDate={currentDate}
@@ -173,6 +190,19 @@ export default function App() {
           setFollowLive(false);
           setIsPlaying(false);
           setIsCalendarOpen(false);
+        }} />}
+
+      {isComparisonOpen && <CompareCities cities={WORLD_CITIES} selectedCity={selectedCity} currentDate={currentDate}
+        onClose={() => setIsComparisonOpen(false)} onFocusCity={city => {
+          handleSelectCity(city);
+          setViewMode('3d-globe');
+          setIsComparisonOpen(false);
+        }} />}
+      {isGroundSkyOpen && selectedCity && <GroundSkyView city={selectedCity} currentDate={currentDate}
+        onClose={() => setIsGroundSkyOpen(false)} onUpdateDate={date => {
+          setCurrentDate(date);
+          setFollowLive(false);
+          setIsPlaying(false);
         }} />}
 
       {/* Ergonomic Collapsible Bottom Control Dock */}
