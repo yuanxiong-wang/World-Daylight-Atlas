@@ -11,11 +11,36 @@ import { DaylightCalendar } from './components/DaylightCalendar';
 import { ShareViewDialog } from './components/ShareViewDialog';
 import { CompareCities } from './components/CompareCities';
 import { GroundSkyView } from './components/GroundSkyView';
+import { GlobeTour } from './components/GlobeTour';
+import { TOUR_CITY_IDS } from './utils/globeTour';
 import { MobileControls } from './components/MobileControls';
 import type { MobileTool } from './components/MobileControls';
 import { createShareUrl, DEFAULT_LAYERS, readSharedView } from './utils/viewState';
 
 export default function App() {
+  const [tourProgress, setTourProgress] = useState<number | null>(null);
+  const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const tourStops = useMemo(() => TOUR_CITY_IDS.map(id => WORLD_CITIES.find(city => city.id === id)!), []);
+  const tourReturnFocus = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const change = () => setReducedMotion(query.matches);
+    query.addEventListener('change', change);
+    return () => query.removeEventListener('change', change);
+  }, []);
+  const startTour = () => {
+    tourReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setIsPlaying(false); setFollowLive(false); setViewMode('3d-globe');
+    setActiveCameraPreset(null); setTourProgress(0);
+  };
+  const closeTour = () => {
+    setTourProgress(null); setActiveCameraPreset(selectedCity ? 'focus-city' : 'equator-view');
+    requestAnimationFrame(() => {
+      const previous = tourReturnFocus.current;
+      if (previous?.isConnected) previous.focus();
+      else (document.querySelector('[data-testid="mobile-navigation"] button:last-child') as HTMLElement)?.focus();
+    });
+  };
   const [initialView] = useState(() => readSharedView(window.location.hash));
   const [currentDate, setCurrentDate] = useState<Date>(() => initialView?.date ?? new Date());
   const [followLive, setFollowLive] = useState(!initialView);
@@ -44,6 +69,7 @@ export default function App() {
     const restore = () => {
       const state = readSharedView(window.location.hash);
       if (!state) return;
+      setTourProgress(null);
       setCurrentDate(state.date);
       setSelectedCity(state.city);
       setViewMode(state.view);
@@ -113,6 +139,7 @@ export default function App() {
   // Keyboard navigation shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (tourProgress !== null) return;
       // Keep native keyboard controls working inside dialogs.
       if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return;
       // Ignore if user is typing in search input
@@ -132,10 +159,11 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleResetToNow]);
+  }, [handleResetToNow, tourProgress]);
 
   const openTool = (tool: MobileTool) => {
     setIsPlaying(false);
+    if (tool === 'tour') startTour();
     if (tool === 'share') setShareUrl(createShareUrl(window.location.href, { date: currentDate, city: selectedCity, view: viewMode, layers }));
     if (tool === 'calendar' && selectedCity) setIsCalendarOpen(true);
     if (tool === 'compare') setIsComparisonOpen(true);
@@ -149,6 +177,7 @@ export default function App() {
       {/* 3D Globe or 2D Map View */}
       {viewMode === '3d-globe' ? (
         <EarthGlobe
+          tour={tourProgress === null ? null : { progress: tourProgress, stops: tourStops, reducedMotion }}
           currentDate={currentDate}
           subsolarPoint={subsolarPoint}
           cities={WORLD_CITIES}
@@ -172,7 +201,11 @@ export default function App() {
         />
       )}
 
+      {tourProgress !== null && <GlobeTour stops={tourStops} progress={tourProgress} reducedMotion={reducedMotion}
+        currentDate={currentDate} onProgress={setTourProgress} onClose={closeTour} />}
+      {tourProgress === null && <>
       <div className="hidden lg:flex absolute top-24 left-4 z-20 flex-wrap gap-2 max-w-[calc(100vw-2rem)]">
+        <button onClick={startTour} className="shrink-0 rounded-xl border border-sky-700 bg-slate-900/90 px-3 py-2 text-xs text-sky-300 cursor-pointer">Helix globe tour</button>
         <button onClick={() => setShareUrl(createShareUrl(window.location.href, {
           date: currentDate, city: selectedCity, view: viewMode, layers,
         }))} className="shrink-0 whitespace-nowrap rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-sky-300 hover:bg-slate-800 cursor-pointer">
@@ -272,6 +305,7 @@ export default function App() {
           }}
         />
       )}
+      </>}
     </div>
   );
 }
