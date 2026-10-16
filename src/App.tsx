@@ -90,31 +90,43 @@ export default function App() {
   // Compute Subsolar Point in real-time
   const subsolarPoint = useMemo(() => getSubsolarPoint(currentDate), [currentDate]);
 
-  // Simulation loop for playback or live ticking
-  const lastTickRef = useRef<number>(performance.now());
+  // Reduced motion uses explicit one-second steps instead of continuous animation.
+  // Hidden tabs pause playback, and resuming never catches up elapsed hidden time.
+  useEffect(() => { setIsPlaying(false); }, [reducedMotion]);
   useEffect(() => {
-    let animId: number;
-
+    if (!isPlaying) return;
+    let frame: number | null = null;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    let previous = performance.now();
     const tick = (time: number) => {
-      const delta = (time - lastTickRef.current) / 1000;
-      lastTickRef.current = time;
-
-      if (isPlaying) {
-        // Advance time by delta * playbackSpeed seconds
-        setCurrentDate((prev) => new Date(prev.getTime() + delta * playbackSpeed * 1000));
-      }
-
-      animId = requestAnimationFrame(tick);
+      const elapsed = Math.min(0.1, (time - previous) / 1000);
+      previous = time;
+      setCurrentDate(date => new Date(date.getTime() + elapsed * playbackSpeed * 1000));
+      frame = requestAnimationFrame(tick);
     };
-
-    animId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(animId);
-  }, [isPlaying, playbackSpeed]);
+    const stop = () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      if (timer !== null) clearInterval(timer);
+      frame = null; timer = null;
+    };
+    const sync = () => {
+      stop();
+      if (document.hidden) return;
+      previous = performance.now();
+      if (reducedMotion) timer = setInterval(() => {
+        setCurrentDate(date => new Date(date.getTime() + playbackSpeed * 1000));
+      }, 1000);
+      else frame = requestAnimationFrame(tick);
+    };
+    sync(); document.addEventListener('visibilitychange', sync);
+    return () => { stop(); document.removeEventListener('visibilitychange', sync); };
+  }, [isPlaying, playbackSpeed, reducedMotion]);
 
   // Real-time ticking when not playing (updates every 10 seconds to keep live accurate)
   useEffect(() => {
     if (isPlaying || !followLive) return;
     const interval = setInterval(() => {
+      if (document.hidden) return;
       // If within 1 minute of real current time, sync
       const now = new Date();
       if (Math.abs(now.getTime() - currentDate.getTime()) < 60000) {
@@ -178,6 +190,8 @@ export default function App() {
       {/* 3D Globe or 2D Map View */}
       {viewMode === '3d-globe' ? (
         <EarthGlobe
+          renderActive={!isCalendarOpen && !isComparisonOpen && !isGroundSkyOpen && !shareUrl && !isCityModalOpen && !isAnalyticsOpen}
+          reducedMotion={reducedMotion}
           tour={tourProgress === null ? null : { progress: tourProgress, stops: tourStops, reducedMotion }}
           currentDate={currentDate}
           subsolarPoint={subsolarPoint}
@@ -252,7 +266,7 @@ export default function App() {
         }} />}
 
       <MobileControls currentDate={currentDate} cities={WORLD_CITIES} selectedCity={selectedCity}
-        layers={layers} viewMode={viewMode} isPlaying={isPlaying} playbackSpeed={playbackSpeed}
+        reducedMotion={reducedMotion} layers={layers} viewMode={viewMode} isPlaying={isPlaying} playbackSpeed={playbackSpeed}
         onSelectCity={handleSelectCity} onUpdateDate={date => {
           setCurrentDate(date); setFollowLive(false); setIsPlaying(false);
         }} onUpdateLayers={updateLayers} onChangeViewMode={setViewMode}
@@ -261,6 +275,7 @@ export default function App() {
 
       {/* Ergonomic Collapsible Bottom Control Dock */}
       <SolarHUD
+        reducedMotion={reducedMotion}
         currentDate={currentDate}
         onUpdateDate={setCurrentDate}
         isPlaying={isPlaying}

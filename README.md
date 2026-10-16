@@ -7,16 +7,20 @@ Explore sunlight around the world with an interactive 3D globe, a 2D daylight ma
 ## Features
 
 - **3D Earth:** procedural terrain textures, night lights, clouds, atmosphere, the daylight terminator, and twilight boundaries.
-- **City inspection:** choose a city from the dock or click the globe to inspect a location. Selecting a city centers the globe camera on it.
+- **City inspection:** choose from 45 built-in cities in the dock or click the globe to inspect a location. Selecting a city centers the globe camera on it.
 - **Sun trajectories:** inspect today's daylight and nighttime arcs, solar noon, sunrise, sunset, and the current Sun position.
 - **Seasonal comparisons:** March and September equinoxes and June and December solstices share the same milestone names, colors, and dates across the dock, globe, and inspector.
 - **Local solar charts:** compare altitude curves, daily peaks, daylight duration, twilight times, and annual noon altitude range.
+- **UTC and local clocks:** the header and city comparison show the simulation instant in your device’s time zone beneath UTC, with matching typography and the UTC offset. Each comparison card also shows that city’s clock and date.
+- **Helix globe tour:** an optional scroll/swipe camera tour with vortex transitions and five latitude stops; normal atlas gestures stay unchanged.
 - **Time simulation:** scrub the UTC timeline, change dates, adjust playback speed, or return to the present.
 - **Shareable views:** copy a snapshot link with the location, UTC date/time, map mode, and layer settings. Shared views open paused, including custom observation points.
 - **Annual daylight calendar:** inspect every day of a year, compare longest/shortest daylight duration, see polar day/night counts, and click a date to jump to it.
 - **Compare cities:** compare two or three locations' clocks, solar altitude, sunrise/sunset, daylight duration, and 24-hour curves.
 - **Ground-level sky:** look around an ideal horizon with compass directions, current Sun position, and daily/seasonal solar paths; drag, use arrow keys, or step through time.
 - **Additional views:** global daylight analytics, lunar phases, and camera presets.
+
+Seattle, Dallas, Charlotte, Toronto, and New York City are included. Longyearbyen, Beijing, Hong Kong, and New Delhi are no longer in the built-in list. Existing shared links can still restore custom coordinates.
 
 The globe's seasonal-path toggle and the inspector's seasonal-curve toggle work independently.
 
@@ -40,11 +44,11 @@ The current app runs in the browser and does not require API keys. The variables
 - Drag the globe to orbit and scroll to zoom.
 - Select a city to center it, or click the Earth to inspect a custom observation point.
 - Use **3D Sky Dome** to frame the selected location's solar trajectories.
-- Click a trajectory apex's pick area to jump to its sampled solar noon.
+- Click a trajectory apex's pick area to jump to its sampled solar noon. Seasonal milestone buttons jump to the computed equinox/solstice instant in UTC; the date labels change with the year.
 - Open **Trajectory Chart** for local altitude curves and daylight comparisons.
 - Use the dock to control time, layers, cities, lunar information, and camera presets.
 - On desktop, use **Share view**, **Annual daylight**, **Compare cities**, and **Ground-level sky** in the toolbar below the header. On mobile, open **Tools** in the bottom navigation; the globe stays clear until a tool is opened. Select a location before opening its calendar or sky view. Mobile **Cities**, **Time**, and **Layers** open one bottom sheet at a time. Tap the selected city above the navigation for its details, then close the sheet to return to the globe.
-- Calendar dates and comparison curves use UTC. City clocks use each location's time zone. Calendar years span 1900–2100.
+- Calendar dates and comparison curves use UTC. **Local** beneath UTC always means the viewer’s device time zone and follows the simulation instant. City clocks use each location's time zone. Calendar years span 1900–2100.
 - In the ground-level sky, drag or use arrow keys to look around. **Face the Sun** recenters the view; hour/day buttons change the simulation time. Its seasonal overlay is independent of the globe and inspector overlays.
 - Shared links contain selected coordinates in the URL fragment. Share them with people you want to see that location. Camera orientation and open dialogs are not included.
 
@@ -116,18 +120,48 @@ src/
   types/                  Shared TypeScript models
   utils/
     solarCalculator.ts    Solar calculations and shared milestones
-    lunarCalculator.ts    Lunar phase calculations
+    lunarCalculator.ts    Ephemeris phase, illumination, and lunar event searches
+    visibleFrameLoop.ts   Visibility-aware render scheduling
     earthTextures.ts      Procedural globe textures
 tests/                    Numerical regression checks
 .github/workflows/        GitHub Pages build and deployment
 ```
 
-Built with React, TypeScript, Vite, Three.js, and Tailwind CSS.
+Built with React, TypeScript, Vite, Three.js, Tailwind CSS, and pinned Astronomy Engine 2.1.19.
 
-## Solar model
+## Astronomy model and validation
 
-Dates and the timeline use UTC; city time readouts use the city's time zone. Seasonal milestones are fixed calendar benchmarks, not calculated astronomical event instants. Daily chart peaks are sampled from altitude curves. Annual noon altitude range includes tropical zenith crossings and is shared by the globe and inspector.
+Dates and the timeline use UTC; city clocks use the city’s time zone and the **Local** clock uses the viewer’s device time zone. All clocks represent the same simulation instant.
 
+Equinoxes and solstices are calculated for each year with [Astronomy Engine](https://github.com/cosinekitty/astronomy), rather than fixed calendar dates. The dock, mobile time sheet, globe, inspector, and ground-level sky use that shared list. Event buttons jump to the exact computed instant; solar-path apex picks still jump to sampled solar noon on that event’s UTC date. Daily chart peaks are sampled altitude maxima. Annual noon altitude range includes tropical zenith crossings and is shared by the globe and inspector.
+
+Solar positions use the existing NOAA/Meeus-style equations. Daily rise/set and twilight calculations use the UTC date at noon, independent of the simulation clock, and preserve fractional minutes. Rise/set assumes an ideal sea-level horizon and a solar-center altitude of −0.8333° (standard refraction plus solar radius). Terrain, observer height, weather, and variable refraction are not modeled. Solar altitude readouts are geometric, without atmospheric refraction.
+
+Lunar elongation and illumination now use Astronomy Engine’s ephemeris. Next new/full Moon times are searched astronomical events; age is elapsed time since the previous searched new Moon. Event timestamps are not calculated from rounded day counts. The displayed age/countdowns are rounded to 0.1 day, elongation to 0.1°, and illumination to 0.1 percentage point.
+
+`tests/astronomy-reference.test.mjs` checks independent published event fixtures and compares the separate solar model with Astronomy Engine:
+
+| Quantity | Test tolerance | Reference and coverage |
+| --- | --- | --- |
+| Equinox/solstice instant | 2 minutes | Eight published UTC events in 2024–2025; USNO season tables. All 201 years from 1900–2100 also checked for ordered, valid events. |
+| Geometric solar altitude | 0.05° | Astronomy Engine topocentric Sun coordinates, without refraction; 480 positions. |
+| Solar azimuth | 0.1° | Same positions, excluding within 5° of zenith/nadir, where azimuth is poorly defined. |
+| Sunrise/sunset | 3 minutes | Astronomy Engine sea-level rise/set search; 220 nonpolar events plus polar no-event cases. |
+| New/full Moon instant | 2 minutes | Seven published NASA phase events in 2000, 2024, and 2025. |
+| Lunar illumination at those events | 0.2 percentage point | Near 0% at published new Moons and 100% at published full Moons. |
+
+The solar matrix covers London, Shanghai, Sydney, Seattle, Singapore, and Tromsø; years 1900, 2000, 2024, 2026, and 2100; March 20, June 21, September 22, and December 21; and 00:00, 06:00, 12:00, and 18:00 UTC. Observed maxima on that matrix: altitude **0.0143°**, azimuth **0.0169°**, and rise/set **1.430 minutes**. The published lunar fixture maximum is **1.038 minutes**. Tests print these maxima so future changes can be audited.
+
+These are tested tolerances for the listed samples, not a global accuracy guarantee. Near polar day/night transitions, atmospheric and horizon assumptions can dominate event timing. Twilight times, all intermediate lunar phases, and every day in the calendar have not received independent numerical accuracy bounds.
+
+Sources: [USNO Earth seasons](https://aa.usno.navy.mil/data/Earth_Seasons), [NASA phases 2001–2100](https://eclipse.gsfc.nasa.gov/phase/phase2001gmt.html), and [NASA phases 1901–2000](https://eclipse.gsfc.nasa.gov/phase/phase1901gmt.html).
+
+## Rendering and motion
+
+- Globe and ground-sky canvas pixel ratios are capped at **2**; automated headless WebGL checks use 1.
+- The globe render loop stops when the document is hidden, its viewport is offscreen/hidden, or a planner/inspector dialog covers it. It resumes with a fresh frame clock and cleans up observers/listeners on unmount. Switching to the 2D map unmounts the globe renderer.
+- Playback schedules no animation loop when paused. Hidden tabs suspend playback and resume without catching up hidden elapsed time; live-clock updates also skip hidden tabs.
+- The system’s **prefers-reduced-motion** setting disables globe auto-rotation, orbital damping, cloud drift, and tour spins/vortex effects. Automatic rotation is unavailable in the mobile layer controls while this preference is active. Explicitly starting playback advances simulation time once per second instead of continuously animating it. Changing the motion preference pauses playback.
 
 ### Scroll-driven globe tour
 

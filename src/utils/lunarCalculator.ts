@@ -1,53 +1,26 @@
-import { LunarPhaseData, LunarPhaseType } from '../types';
-import { getJulianDate, getJulianCentury } from './solarCalculator';
+import type { LunarPhaseData, LunarPhaseType } from '../types';
+import { Body, Illumination, MoonPhase, SearchMoonPhase } from 'astronomy-engine';
 
-const DEG2RAD = Math.PI / 180;
+// Reuse event searches while the instant stays within the same new/full interval.
+let events: { from: number; until: number; full: number; nextNew: number; lastNew: number } | null = null;
+function getEvents(date: Date) {
+  const now = date.getTime();
+  if (!events || now < events.from || now >= events.until) {
+    const start = new Date(now + 1000); // next means strictly after this instant
+    const full = SearchMoonPhase(180, start, 40)!.date.getTime();
+    const nextNew = SearchMoonPhase(0, start, 40)!.date.getTime();
+    const lastNew = SearchMoonPhase(0, date, -40)!.date.getTime();
+    events = { from: now, until: Math.min(full, nextNew), full, nextNew, lastNew };
+  }
+  return events;
+}
 
-/**
- * Calculates high-accuracy Lunar Phase data for a given date
- * Uses astronomical mean elongation and anomaly formulas (Meeus Astronomical Algorithms)
- */
+/** Geocentric phase, illuminated fraction and searched event times from Astronomy Engine. */
 export function getLunarPhase(date: Date): LunarPhaseData {
-  const jd = getJulianDate(date);
-  const t = getJulianCentury(jd);
-
-  // Mean elongation of the Moon (degrees)
-  let d =
-    297.8501921 +
-    445267.1114034 * t -
-    0.0018819 * t * t +
-    (t * t * t) / 545868 -
-    (t * t * t * t) / 113065000;
-  d = ((d % 360) + 360) % 360;
-
-  // Sun's mean anomaly (degrees)
-  const m = ((357.5291092 + 35999.0502909 * t - 0.0001536 * t * t) % 360 + 360) % 360;
-
-  // Moon's mean anomaly (degrees)
-  const mPrime = ((134.9633964 + 477198.8675055 * t + 0.0087414 * t * t) % 360 + 360) % 360;
-
-  // Phase angle i (degrees) between Sun and Earth as seen from Moon
-  const dRad = d * DEG2RAD;
-  const mRad = m * DEG2RAD;
-  const mpRad = mPrime * DEG2RAD;
-
-  const phaseAngle =
-    180 -
-    d -
-    6.289 * Math.sin(mpRad) +
-    2.1 * Math.sin(mRad) -
-    1.274 * Math.sin(2 * dRad - mpRad) -
-    0.658 * Math.sin(2 * dRad) -
-    0.214 * Math.sin(2 * mpRad) -
-    0.11 * Math.sin(dRad);
-
-  // Illuminated fraction k (0.0 to 1.0)
-  const k = (1 + Math.cos(phaseAngle * DEG2RAD)) / 2;
-  const illumination = Math.round(Math.max(0, Math.min(1, k)) * 1000) / 10; // e.g. 78.4%
-
-  // Synodic month length (days)
-  const SYNODIC_MONTH = 29.53058867;
-  const ageDays = Math.round(((d / 360) * SYNODIC_MONTH) * 10) / 10;
+  const d = MoonPhase(date);
+  const illumination = Math.round(Illumination(Body.Moon, date).phase_fraction * 1000) / 10;
+  const event = getEvents(date);
+  const ageDays = Math.round((date.getTime() - event.lastNew) / 8640000) / 10;
 
   // Determine Lunar Phase category & glyph
   let phase: LunarPhaseType;
@@ -88,16 +61,10 @@ export function getLunarPhase(date: Date): LunarPhaseData {
     glyph = '🌘';
   }
 
-  // Days to next Full Moon (d = 180°)
-  let deltaFullDeg = 180 - d;
-  if (deltaFullDeg < 0) deltaFullDeg += 360;
-  const daysToFullMoon = Math.round((deltaFullDeg / 360) * SYNODIC_MONTH * 10) / 10;
-  const nextFullMoonDate = new Date(date.getTime() + daysToFullMoon * 86400000);
-
-  // Days to next New Moon (d = 360°)
-  const deltaNewDeg = 360 - d;
-  const daysToNewMoon = Math.round((deltaNewDeg / 360) * SYNODIC_MONTH * 10) / 10;
-  const nextNewMoonDate = new Date(date.getTime() + daysToNewMoon * 86400000);
+  const nextFullMoonDate = new Date(event.full);
+  const nextNewMoonDate = new Date(event.nextNew);
+  const daysToFullMoon = Math.round((event.full - date.getTime()) / 8640000) / 10;
+  const daysToNewMoon = Math.round((event.nextNew - date.getTime()) / 8640000) / 10;
 
   return {
     phase,
@@ -112,3 +79,4 @@ export function getLunarPhase(date: Date): LunarPhaseData {
     daysToNewMoon,
   };
 }
+

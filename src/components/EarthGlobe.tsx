@@ -5,6 +5,7 @@ import { SubsolarPoint, CityData, GlobeLayerSettings } from '../types';
 import { createEarthTextures, createStarfield } from '../utils/earthTextures';
 import { getSolarPosition, getSolarMilestones, getAnnualSolarAltitudeRange, splitSolarPath } from '../utils/solarCalculator';
 
+import { createVisibleFrameLoop } from '../utils/visibleFrameLoop';
 import { sampleTour } from '../utils/globeTour';
 
 interface SolarPickPayload {
@@ -13,6 +14,8 @@ interface SolarPickPayload {
 }
 
 interface EarthGlobeProps {
+  renderActive?: boolean;
+  reducedMotion?: boolean;
   tour?: { progress: number; stops: CityData[]; reducedMotion: boolean } | null;
   currentDate: Date;
   subsolarPoint: SubsolarPoint;
@@ -236,6 +239,8 @@ function createLabelSprite(
 }
 
 export const EarthGlobe: React.FC<EarthGlobeProps> = ({
+  renderActive = true,
+  reducedMotion = false,
   tour = null,
   currentDate,
   subsolarPoint,
@@ -250,6 +255,12 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
   onResetCameraPreset,
   onTriggerCameraPreset,
 }) => {
+  const renderActiveRef = useRef(renderActive);
+  renderActiveRef.current = renderActive;
+  const reducedMotionRef = useRef(reducedMotion);
+  reducedMotionRef.current = reducedMotion;
+  const frameLoopRef = useRef<ReturnType<typeof createVisibleFrameLoop> | null>(null);
+  useEffect(() => { frameLoopRef.current?.sync(); }, [renderActive]);
   const isTour = !!tour;
   const tourRef = useRef(tour);
   tourRef.current = tour;
@@ -273,7 +284,6 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
   const subsolarLatitudeRingRef = useRef<THREE.Line | null>(null);
   const citiesGroupRef = useRef<THREE.Group | null>(null);
   const graticuleGroupRef = useRef<THREE.Group | null>(null);
-  const animFrameIdRef = useRef<number | null>(null);
 
   const EARTH_RADIUS = 50;
 
@@ -298,7 +308,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     const isHeadless = navigator.webdriver || /HeadlessChrome/i.test(navigator.userAgent);
     const renderer = new THREE.WebGLRenderer({ antialias: !isHeadless, powerPreference: 'high-performance' });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(isHeadless ? 1 : Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(isHeadless ? 1 : Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
@@ -501,6 +511,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       const h = container.clientHeight;
       cameraRef.current.aspect = w / h;
       cameraRef.current.updateProjectionMatrix();
+      rendererRef.current.setPixelRatio(isHeadless ? 1 : Math.min(window.devicePixelRatio || 1, 2));
       rendererRef.current.setSize(w, h);
     };
     window.addEventListener('resize', handleResize);
@@ -509,15 +520,11 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     renderer.compile(scene, camera);
 
     // Animation Loop
-    let lastTime = performance.now();
     let cloudOffset = 0;
 
-    const animate = (time: number) => {
-      const delta = (time - lastTime) / 1000;
-      lastTime = time;
-
+    const animate = (_time: number, delta: number) => {
       // Drift clouds slowly
-      cloudOffset += delta * 0.002;
+      if (!reducedMotionRef.current) cloudOffset += delta * 0.002;
       if (earthMatRef.current) {
         earthMatRef.current.uniforms.uCloudOffset.value = cloudOffset;
       }
@@ -533,13 +540,14 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
         camera.lookAt(0, 0, 0);
       } else controls.update();
       renderer.render(scene, camera);
-      animFrameIdRef.current = requestAnimationFrame(animate);
     };
 
-    animFrameIdRef.current = requestAnimationFrame(animate);
+    const frameLoop = createVisibleFrameLoop(container, animate, () => renderActiveRef.current);
+    frameLoopRef.current = frameLoop;
 
     return () => {
-      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
+      frameLoop.dispose();
+      frameLoopRef.current = null;
       window.removeEventListener('resize', handleResize);
       controls.dispose();
       clearAnnotationGroup(sunTrajectoryGroup);
@@ -1002,10 +1010,11 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       citiesGroupRef.current.visible = layers.showCities;
     }
     if (controlsRef.current) {
-      controlsRef.current.autoRotate = layers.autoRotate;
+      controlsRef.current.autoRotate = layers.autoRotate && !reducedMotion;
+      controlsRef.current.enableDamping = !reducedMotion;
       controlsRef.current.autoRotateSpeed = layers.rotationSpeed;
     }
-  }, [layers, selectedCity, isTour]);
+  }, [layers, selectedCity, isTour, reducedMotion]);
 
   // Render City Markers in 3D
   useEffect(() => {
