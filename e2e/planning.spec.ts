@@ -9,7 +9,7 @@ test('sharing, calendar, city comparison and ground sky work together', async ({
     city: { id: 'shanghai', name: 'Shanghai', country: 'China', lat: 31.2304, lng: 121.4737, timezone: 'Asia/Shanghai' },
     view: '2d-map' as const, layers: { ...DEFAULT_LAYERS, showSeasonalPaths: false },
   };
-  await page.goto(createShareUrl(baseURL!, snapshot));
+  await page.goto(createShareUrl(baseURL!, snapshot), { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'World Daylight Atlas' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Share view', exact: true }).click();
@@ -70,7 +70,7 @@ test('annual calendar fits a narrow screen and returns keyboard focus', async ({
     date: new Date('2024-02-29T12:00:00Z'),
     city: { id: 'london', name: 'London', country: 'UK', lat: 51.5, lng: 0, timezone: 'Europe/London' },
     view: '2d-map', layers: { ...DEFAULT_LAYERS },
-  }));
+  }), { waitUntil: 'domcontentloaded' });
   const trigger = page.getByRole('button', { name: 'Annual daylight', exact: true });
   await trigger.click();
   const dialog = page.getByRole('dialog');

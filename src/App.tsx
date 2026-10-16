@@ -160,24 +160,24 @@ export default function App() {
         />
       )}
 
-      <div className="absolute top-24 left-4 z-20 flex flex-wrap gap-2 max-w-[calc(100vw-2rem)]">
+      <div className="absolute top-40 sm:top-24 left-4 z-20 flex sm:flex-wrap gap-2 max-w-[calc(100vw-2rem)] overflow-x-auto sm:overflow-visible">
         <button onClick={() => setShareUrl(createShareUrl(window.location.href, {
           date: currentDate, city: selectedCity, view: viewMode, layers,
-        }))} className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-sky-300 hover:bg-slate-800 cursor-pointer">
+        }))} className="shrink-0 whitespace-nowrap rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-sky-300 hover:bg-slate-800 cursor-pointer">
           Share view
         </button>
         <button disabled={!selectedCity} onClick={() => { setIsPlaying(false); setIsCalendarOpen(true); }}
           title={selectedCity ? `Annual daylight for ${selectedCity.name}` : 'Select a city first'}
-          className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-amber-300 hover:bg-slate-800 disabled:opacity-40 cursor-pointer">
+          className="shrink-0 whitespace-nowrap rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-amber-300 hover:bg-slate-800 disabled:opacity-40 cursor-pointer">
           Annual daylight
         </button>
         <button onClick={() => { setIsPlaying(false); setIsComparisonOpen(true); }}
-          className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-violet-300 hover:bg-slate-800 cursor-pointer">
+          className="shrink-0 whitespace-nowrap rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-violet-300 hover:bg-slate-800 cursor-pointer">
           Compare cities
         </button>
         <button disabled={!selectedCity} onClick={() => { setIsPlaying(false); setIsGroundSkyOpen(true); }}
           title={selectedCity ? `Sky seen from ${selectedCity.name}` : 'Select a city first'}
-          className="rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-emerald-300 hover:bg-slate-800 disabled:opacity-40 cursor-pointer">
+          className="shrink-0 whitespace-nowrap rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-emerald-300 hover:bg-slate-800 disabled:opacity-40 cursor-pointer">
           Ground-level sky
         </button>
       </div>
