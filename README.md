@@ -38,12 +38,12 @@ npm run dev
 
 Open [localhost:3000](http://localhost:3000).
 
-The current app runs in the browser and does not require API keys. Worldwide search requires an Internet connection to Open-Meteo; built-in and already-selected session cities remain available without that request. The variables in `.env.example` are retained from the original scaffold and are not used by the current app.
+The current app runs in the browser and does not require API keys. Worldwide search requires an Internet connection to Open-Meteo; the 45 built-in cities remain available without that request. The variables in `.env.example` are retained from the original scaffold and are not used by the current app.
 
 ## Controls
 
 - Drag the globe to orbit and scroll to zoom.
-- Select a city to center it, or click the Earth to inspect a custom observation point. In **Cities**, type at least two characters to search worldwide; results show region/country to distinguish matching names. Desktop selection closes the dock; mobile selection closes the sheet. Newly selected cities stay in the current session and work with sharing, calendars, charts, ground sky, and comparisons. In **Compare cities**, each card also has **Search worldwide** to replace that city directly.
+- Select a city to center it, or click the Earth to inspect a custom observation point. In **Cities**, type at least two characters to search worldwide; results show region/country to distinguish matching names. Desktop selection closes the dock; mobile selection closes the sheet. A searched location becomes the active selection and works with sharing, calendars, charts, ground sky, and comparisons, without being added to the 45-city catalog. In **Compare cities**, each card also has **Search worldwide** to replace that city directly.
 - Use **3D Sky Dome** to frame the selected location's solar trajectories.
 - Click a trajectory apex's pick area to jump to its sampled solar noon. Seasonal milestone buttons jump to the computed equinox/solstice instant in UTC; the date labels change with the year.
 - Open **Trajectory Chart** for local altitude curves and daylight comparisons.
@@ -163,7 +163,7 @@ Sources: [USNO Earth seasons](https://aa.usno.navy.mil/data/Earth_Seasons), [NAS
 
 Worldwide city searches use the public [Open-Meteo Geocoding API](https://open-meteo.com/en/docs/geocoding-api), backed by [GeoNames](https://www.geonames.org/). Attribution links appear in every search picker. Typed queries (up to 100 characters) are sent directly from the browser to Open-Meteo after a 400 ms debounce, with a minimum of two characters. Requests omit credentials, cancel when the query changes or the picker unmounts, and time out after eight seconds. Successful queries have a bounded in-memory cache. No account or API key is needed for the public endpoint. Rate limits, network failures, retries, and empty results have explicit messages; saved-city search remains available. Results validate coordinates and the IANA time zone before selection.
 
-The app keeps up to 100 additionally selected locations in memory for the current session. They are not persisted to browser storage. Comparison-only search results stay in that comparison until selected with **View on globe**. Shared links retain the chosen coordinates and time zone. Neither the catalog nor the geocoder guarantees every settlement is indexed; try another spelling or a nearby city if no match is returned.
+The catalog always contains exactly the 45 built-in cities. Searching or selecting a result never adds it to the city list or globe marker directory. Only the active location and locations currently being compared are held in memory; there is no accumulated city history or browser-storage list. Comparison-only results disappear when replaced or when the comparison closes. **View on globe** makes a result the active location without changing the catalog. Shared links retain the chosen coordinates and time zone. Neither the catalog nor the geocoder guarantees every settlement is indexed; try another spelling or a nearby city if no match is returned.
 
 **Photography light** appears in the desktop location card, mobile city details, trajectory inspector, and each comparison card. It uses these explicit definitions, which can differ from other photography apps:
 

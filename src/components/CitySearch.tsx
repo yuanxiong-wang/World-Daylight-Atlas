@@ -47,7 +47,7 @@ export function CitySearch({ cities, onSelect, selectedId, excludedCities = [] }
     l.name.toLowerCase() === r.name.toLowerCase() && Math.abs(l.lat - r.lat) < 0.05 && Math.abs(l.lng - r.lng) < 0.05))]
     .filter(city => !excludedCities.some(excluded => excluded.id === city.id || excluded.name.toLowerCase() === city.name.toLowerCase() &&
       Math.abs(excluded.lat - city.lat) < 0.05 && Math.abs(excluded.lng - city.lng) < 0.05));
-  return <div className="space-y-3">
+  return <div data-testid="city-search" className="space-y-3">
     <label htmlFor={id} className="block text-sm text-slate-400">Search cities</label>
     <input id={id} value={query} maxLength={100} onChange={event => setQuery(event.target.value)} placeholder="Any city, worldwide"
       className="w-full rounded-xl border border-slate-600 bg-slate-950 px-3 py-3 text-base" autoComplete="off" spellCheck={false} />
