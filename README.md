@@ -43,7 +43,7 @@ The current app runs in the browser and does not require API keys. The variables
 - Click a trajectory apex's pick area to jump to its sampled solar noon.
 - Open **Trajectory Chart** for local altitude curves and daylight comparisons.
 - Use the dock to control time, layers, cities, lunar information, and camera presets.
-- Use **Share view**, **Annual daylight**, **Compare cities**, and **Ground-level sky** in the toolbar below the header. Select a location before opening its calendar or sky view.
+- On desktop, use **Share view**, **Annual daylight**, **Compare cities**, and **Ground-level sky** in the toolbar below the header. On mobile, open **Tools** in the bottom navigation; the globe stays clear until a tool is opened. Select a location before opening its calendar or sky view. Mobile **Cities**, **Time**, and **Layers** open one bottom sheet at a time. Tap the selected city above the navigation for its details, then close the sheet to return to the globe.
 - Calendar dates and comparison curves use UTC. City clocks use each location's time zone. Calendar years span 1900–2100.
 - In the ground-level sky, drag or use arrow keys to look around. **Face the Sun** recenters the view; hour/day buttons change the simulation time. Its seasonal overlay is independent of the globe and inspector overlays.
 - Shared links contain selected coordinates in the URL fragment. Share them with people you want to see that location. Camera orientation and open dialogs are not included.
