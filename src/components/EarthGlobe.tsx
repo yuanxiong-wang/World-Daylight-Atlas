@@ -179,7 +179,8 @@ function createAtmosphereMaterial(): THREE.ShaderMaterial {
 function clearAnnotationGroup(group: THREE.Group) {
   group.traverse(object => {
     if (object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Sprite) {
-      if ('geometry' in object) object.geometry.dispose();
+      // Sprite geometry is shared by Three.js; only meshes and lines own theirs.
+      if (object instanceof THREE.Mesh || object instanceof THREE.Line) object.geometry.dispose();
       const materials = Array.isArray(object.material) ? object.material : [object.material];
       for (const material of materials) {
         if ('map' in material && material.map instanceof THREE.Texture) material.map.dispose();
