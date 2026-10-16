@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import type { CityData } from '../types';
 import { getDailySolarCurve, getSolarPosition, getSolarTimes } from '../utils/solarCalculator';
 import { formatDaylight } from '../utils/daylightCalendar';
+import { CitySearch } from './CitySearch';
+import { PhotographyLight } from './PhotographyLight';
 import { LocalClock } from './LocalClock';
 import { Dialog } from './Dialog';
 
@@ -11,8 +13,12 @@ export function CompareCities({ cities, selectedCity, currentDate, onFocusCity, 
   cities: CityData[]; selectedCity: CityData | null; currentDate: Date;
   onFocusCity: (city: CityData) => void; onClose: () => void;
 }) {
-  const available = useMemo(() => selectedCity && !cities.some(city => city.id === selectedCity.id)
-    ? [selectedCity, ...cities] : cities, [cities, selectedCity]);
+  const [extra, setExtra] = useState<CityData[]>([]);
+  const [searchSlot, setSearchSlot] = useState<number | null>(null);
+  const available = useMemo(() => {
+    const combined = [...cities, ...(selectedCity ? [selectedCity] : []), ...extra];
+    return combined.filter((city, index) => combined.findIndex(c => c.id === city.id) === index);
+  }, [cities, selectedCity, extra]);
   const [ids, setIds] = useState(() => {
     const first = selectedCity ?? available.find(city => city.id === 'london') ?? available[0];
     const second = available.find(city => city.id === 'shanghai' && city.id !== first.id)
@@ -43,6 +49,15 @@ export function CompareCities({ cities, selectedCity, currentDate, onFocusCity, 
           if (next) setIds([...ids, next.id]);
         }} className="rounded-lg bg-slate-800 hover:bg-slate-700 px-3 py-2 text-sm cursor-pointer">+ Add a third city</button>}
       </div>
+      {searchSlot !== null && <section className="mb-4 rounded-xl border border-slate-700 p-3">
+        <div className="flex justify-between items-center gap-3 mb-3"><h3 className="text-sm">Find city {searchSlot + 1} worldwide</h3>
+          <button className="min-h-11 px-3 text-xs underline cursor-pointer" onClick={() => setSearchSlot(null)}>Cancel search</button></div>
+        <CitySearch excludedCities={compared.filter((_, index) => index !== searchSlot)} cities={available.filter(city => !ids.includes(city.id))} onSelect={city => {
+          if (!available.some(saved => saved.id === city.id)) setExtra(previous => [...previous, city]);
+          if (!ids.some((id, i) => i !== searchSlot && id === city.id)) setIds(previous => previous.map((id, i) => i === searchSlot ? city.id : id));
+          setSearchSlot(null);
+        }} />
+      </section>}
       <div className={`grid grid-cols-1 gap-4 ${ids.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
         {results.map(({ city, position, times }, index) => (
           <section key={index} className="rounded-xl border border-slate-700 bg-slate-950/50 p-4">
@@ -57,6 +72,7 @@ export function CompareCities({ cities, selectedCity, currentDate, onFocusCity, 
               {ids.length === 3 && <button onClick={() => setIds(ids.filter((_, i) => i !== index))}
                 aria-label={`Remove ${city.name}`} className="p-2 text-slate-400 hover:text-white cursor-pointer">✕</button>}
             </div>
+            <button onClick={() => setSearchSlot(index)} className="min-h-11 mb-2 text-xs text-sky-300 underline cursor-pointer">Search worldwide for city {index + 1}</button>
             <p className="font-mono text-xl" style={{ color: COLORS[index] }}>{clock(currentDate, city)}</p>
             <p className="text-xs text-slate-400 mb-4">{currentDate.toLocaleDateString('en-US', {
               timeZone: city.timezone, weekday: 'short', month: 'short', day: 'numeric',
@@ -68,6 +84,7 @@ export function CompareCities({ cities, selectedCity, currentDate, onFocusCity, 
               <dt className="text-slate-400">Sunset</dt><dd className="text-right font-mono">{clock(times.sunset, city)}</dd>
               <dt className="text-slate-400">Daylight</dt><dd className="text-right font-mono text-amber-300">{formatDaylight(times.dayLengthMinutes)}</dd>
             </dl>
+            <div className="mt-4"><PhotographyLight city={city} currentDate={currentDate} /></div>
             {(times.isPolarDay || times.isPolarNight) && <p className="text-xs text-sky-300 mt-2">{times.isPolarDay ? 'Polar day: Sun stays above the horizon' : 'Polar night: Sun stays below the horizon'}</p>}
             <button onClick={() => onFocusCity(city)} className="mt-4 text-xs text-sky-300 hover:text-sky-200 underline cursor-pointer">View on globe →</button>
           </section>

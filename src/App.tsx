@@ -18,6 +18,8 @@ import type { MobileTool } from './components/MobileControls';
 import { createShareUrl, DEFAULT_LAYERS, readSharedView } from './utils/viewState';
 
 export default function App() {
+  const [searchedCities, setSearchedCities] = useState<CityData[]>([]);
+  const allCities = useMemo(() => [...WORLD_CITIES, ...searchedCities], [searchedCities]);
   const [tourProgress, setTourProgress] = useState<number | null>(null);
   const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const tourStops = useMemo(() => TOUR_CITY_IDS.map(id => WORLD_CITIES.find(city => city.id === id)!), []);
@@ -139,6 +141,8 @@ export default function App() {
   // Select city handler
   const handleSelectCity = useCallback((city: CityData | null) => {
     setSelectedCity(city);
+    if (city && !WORLD_CITIES.some(saved => saved.id === city.id)) setSearchedCities(previous =>
+      previous.some(saved => saved.id === city.id) ? previous : [...previous.slice(-99), city]);
     setActiveCameraPreset(city ? 'focus-city' : null);
   }, []);
 
@@ -195,7 +199,7 @@ export default function App() {
           tour={tourProgress === null ? null : { progress: tourProgress, stops: tourStops, reducedMotion }}
           currentDate={currentDate}
           subsolarPoint={subsolarPoint}
-          cities={WORLD_CITIES}
+          cities={allCities}
           selectedCity={selectedCity}
           onSelectCity={handleSelectCity}
           onSelectDate={setCurrentDate}
@@ -210,7 +214,7 @@ export default function App() {
         <Daylight2DMap
           currentDate={currentDate}
           subsolarPoint={subsolarPoint}
-          cities={WORLD_CITIES}
+          cities={allCities}
           selectedCity={selectedCity}
           onSelectCity={handleSelectCity}
         />
@@ -252,7 +256,7 @@ export default function App() {
           setIsCalendarOpen(false);
         }} />}
 
-      {isComparisonOpen && <CompareCities cities={WORLD_CITIES} selectedCity={selectedCity} currentDate={currentDate}
+      {isComparisonOpen && <CompareCities cities={allCities} selectedCity={selectedCity} currentDate={currentDate}
         onClose={() => setIsComparisonOpen(false)} onFocusCity={city => {
           handleSelectCity(city);
           setViewMode('3d-globe');
@@ -265,7 +269,7 @@ export default function App() {
           setIsPlaying(false);
         }} />}
 
-      <MobileControls currentDate={currentDate} cities={WORLD_CITIES} selectedCity={selectedCity}
+      <MobileControls currentDate={currentDate} cities={allCities} selectedCity={selectedCity}
         reducedMotion={reducedMotion} layers={layers} viewMode={viewMode} isPlaying={isPlaying} playbackSpeed={playbackSpeed}
         onSelectCity={handleSelectCity} onUpdateDate={date => {
           setCurrentDate(date); setFollowLive(false); setIsPlaying(false);
@@ -286,7 +290,7 @@ export default function App() {
         subsolarPoint={subsolarPoint}
         layers={layers}
         onUpdateLayers={updateLayers}
-        cities={WORLD_CITIES}
+        cities={allCities}
         selectedCity={selectedCity}
         onSelectCity={handleSelectCity}
         viewMode={viewMode}

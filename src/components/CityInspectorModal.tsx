@@ -1,3 +1,4 @@
+import { PhotographyLight } from './PhotographyLight';
 import React, { useState, useMemo } from 'react';
 import { CityData } from '../types';
 import { getSolarPosition, getSolarTimes, getSolarMilestones, getDailySolarCurve, getAnnualSolarAltitudeRange } from '../utils/solarCalculator';
@@ -330,6 +331,7 @@ export const CityInspectorModal: React.FC<CityInspectorModalProps> = ({
           </div>
 
           {/* Twilight Periods */}
+          <PhotographyLight city={city} currentDate={currentDate} />
           <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-3 space-y-1.5 text-[11px]">
             <div className="text-slate-400 font-semibold mb-1">Twilight Transitions (Local Time):</div>
             <div className="flex justify-between text-slate-300">

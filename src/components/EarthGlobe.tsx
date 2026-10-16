@@ -6,6 +6,7 @@ import { createEarthTextures, createStarfield } from '../utils/earthTextures';
 import { getSolarPosition, getSolarMilestones, getAnnualSolarAltitudeRange, splitSolarPath } from '../utils/solarCalculator';
 
 import { createVisibleFrameLoop } from '../utils/visibleFrameLoop';
+import { PhotographyLight } from './PhotographyLight';
 import { sampleTour } from '../utils/globeTour';
 
 interface SolarPickPayload {
@@ -1264,6 +1265,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
             </div>
           </div>
 
+          {selectedCity && <div className="mt-3"><PhotographyLight city={selectedCity} currentDate={currentDate} /></div>}
           {/* Interactive Seasonal Sun Path Comparison Section */}
           {seasonalMetrics.length > 0 && (
             <div className="mt-3 bg-slate-950/60 border border-slate-800 rounded-xl p-2.5 space-y-2">
