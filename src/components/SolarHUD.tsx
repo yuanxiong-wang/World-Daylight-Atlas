@@ -16,12 +16,13 @@ import {
   Moon,
 } from 'lucide-react';
 import { SubsolarPoint, GlobeLayerSettings, CityData, ViewMode, LunarPhaseType } from '../types';
-import { getSolarPosition, SOLAR_MILESTONES } from '../utils/solarCalculator';
+import { getSolarPosition, getSolarMilestones } from '../utils/solarCalculator';
 import { getLunarPhase } from '../utils/lunarCalculator';
 import { LocalClock } from './LocalClock';
 import { MoonPhaseBadge, MoonDiskSVG } from './MoonPhaseBadge';
 
 interface SolarHUDProps {
+  reducedMotion: boolean;
   currentDate: Date;
   onUpdateDate: (date: Date) => void;
   isPlaying: boolean;
@@ -42,6 +43,7 @@ interface SolarHUDProps {
 }
 
 export const SolarHUD: React.FC<SolarHUDProps> = ({
+  reducedMotion,
   currentDate,
   onUpdateDate,
   isPlaying,
@@ -88,12 +90,8 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
     onUpdateDate(newDate);
   };
 
-  // Jump to specific astronomical season (preserving time of day)
-  const handleJumpToSeason = (monthIndex: number, day: number) => {
-    const newDate = new Date(currentDate);
-    newDate.setUTCMonth(monthIndex, day);
-    onUpdateDate(newDate);
-  };
+  // Jump to the computed astronomical event instant.
+  const handleJumpToSeason = (date: Date) => onUpdateDate(new Date(date));
 
   // Filter cities by search
   const filteredCities = cities.filter(
@@ -388,6 +386,7 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
                   </div>
                 </div>
 
+                {reducedMotion && <p className="text-xs text-slate-400">Reduced motion: playback steps once per second; automatic rotation is off.</p>}
                 {/* Seasonal Solstices & Equinoxes Milestones Bar */}
                 <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
                   <div className="flex items-center gap-1.5 text-slate-400 font-medium">
@@ -395,13 +394,13 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
                     <span className="text-[11px] uppercase tracking-wider font-semibold">Seasonal Paths:</span>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                    {SOLAR_MILESTONES.map(milestone => (
+                    {getSolarMilestones(currentDate.getUTCFullYear()).map(milestone => (
                       <button
                         key={milestone.id}
-                        onClick={() => handleJumpToSeason(milestone.month, milestone.day)}
+                        onClick={() => handleJumpToSeason(milestone.date)}
                         className="px-2 py-1 rounded-lg bg-slate-800/70 hover:bg-slate-700 border font-medium transition-colors cursor-pointer"
                         style={{ color: milestone.color, borderColor: milestone.color }}
-                        title={`Jump to ${milestone.name} (${milestone.month + 1}/${milestone.day})`}
+                        title={`Jump to ${milestone.name}: ${milestone.date.toISOString()} (UTC)`}
                       >
                         {milestone.name} ({milestone.month + 1}/{milestone.day})
                       </button>

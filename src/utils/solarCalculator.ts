@@ -1,26 +1,33 @@
+import { Seasons } from 'astronomy-engine';
 import type { SubsolarPoint, SolarPosition, DaylightPhase, SolarTimes, LatitudeDaylightData } from '../types';
 
 export interface SolarMilestone {
   id: 'march-equinox' | 'june-solstice' | 'september-equinox' | 'december-solstice';
   name: string;
   color: string;
-  month: number;
-  day: number;
 }
 
-// Month names remain correct in both hemispheres. These are approximate
-// calendar benchmarks, not calculated instants of the astronomical events.
+// Month names remain correct in both hemispheres. Dates are computed per year below.
 export const SOLAR_MILESTONES: readonly SolarMilestone[] = [
-  { id: 'march-equinox', name: 'March Equinox', color: '#10b981', month: 2, day: 20 },
-  { id: 'june-solstice', name: 'June Solstice', color: '#f59e0b', month: 5, day: 21 },
-  { id: 'september-equinox', name: 'September Equinox', color: '#a78bfa', month: 8, day: 22 },
-  { id: 'december-solstice', name: 'December Solstice', color: '#38bdf8', month: 11, day: 21 },
+  { id: 'march-equinox', name: 'March Equinox', color: '#10b981' },
+  { id: 'june-solstice', name: 'June Solstice', color: '#f59e0b' },
+  { id: 'september-equinox', name: 'September Equinox', color: '#a78bfa' },
+  { id: 'december-solstice', name: 'December Solstice', color: '#38bdf8' },
 ];
 
+const seasonCache = new Map<number, readonly number[]>();
 export function getSolarMilestones(year: number) {
-  return SOLAR_MILESTONES.map(milestone => ({
-    ...milestone, date: new Date(Date.UTC(year, milestone.month, milestone.day, 12)),
-  }));
+  if (!Number.isInteger(year)) throw new RangeError('Season year must be an integer');
+  let instants = seasonCache.get(year);
+  if (!instants) {
+    const events = Seasons(year);
+    instants = [events.mar_equinox, events.jun_solstice, events.sep_equinox, events.dec_solstice].map(event => event.date.getTime());
+    seasonCache.set(year, instants);
+  }
+  return SOLAR_MILESTONES.map((milestone, i) => {
+    const date = new Date(instants[i]);
+    return { ...milestone, date, month: date.getUTCMonth(), day: date.getUTCDate() };
+  });
 }
 
 export function getDailySolarCurve(latitude: number, longitude: number, date: Date) {
@@ -390,14 +397,16 @@ export function getTwilightLatitude(lng: number, subsolar: SubsolarPoint, sunDep
  * Calculate sunrise, sunset, and twilight times for a specific location and date
  */
 export function getSolarTimes(lat: number, lng: number, date: Date): SolarTimes {
-  const eot = getEquationOfTime(date);
-  const delta = getSunDeclination(date);
+  // A daily result must not depend on the simulation's hour within that UTC date.
+  const day = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12));
+  const eot = getEquationOfTime(day);
+  const delta = getSunDeclination(day);
   
   // Solar noon in minutes from midnight UTC
   const solarNoonMinutes = 720 - 4 * lng - eot;
   const solarNoonDate = new Date(date);
   solarNoonDate.setUTCHours(0, 0, 0, 0);
-  solarNoonDate.setUTCMinutes(solarNoonMinutes);
+  solarNoonDate.setTime(solarNoonDate.getTime() + solarNoonMinutes * 60000);
 
   const phi = lat * DEG2RAD;
   const deltaRad = delta * DEG2RAD;
@@ -548,7 +557,7 @@ export function getSeasonalDates(year: number) {
     label: milestone.name,
     date: milestone.date,
     desc: milestone.id.includes('equinox')
-      ? 'Approximate equinox benchmark'
-      : 'Approximate solstice benchmark',
+      ? 'Computed equinox instant (UTC)'
+      : 'Computed solstice instant (UTC)',
   }));
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Clock, Layers, MapPin, Menu, Pause, Play } from 'lucide-react';
 import type { CityData, GlobeLayerSettings, ViewMode } from '../types';
-import { getSolarPosition, getSolarTimes, SOLAR_MILESTONES } from '../utils/solarCalculator';
+import { getSolarPosition, getSolarTimes, getSolarMilestones } from '../utils/solarCalculator';
 import { getLunarPhase } from '../utils/lunarCalculator';
 import { formatDaylight } from '../utils/daylightCalendar';
 import { MoonDiskSVG } from './MoonPhaseBadge';
@@ -19,10 +19,10 @@ const LAYER_OPTIONS = [
   ['showSunRays', 'Sun rays'], ['showGraticule', 'Latitude / longitude grid'], ['autoRotate', 'Auto-rotate globe'],
 ] as const;
 
-export function MobileControls({ currentDate, cities, selectedCity, layers, viewMode, isPlaying,
+export function MobileControls({ reducedMotion, currentDate, cities, selectedCity, layers, viewMode, isPlaying,
   playbackSpeed, onSelectCity, onUpdateDate, onUpdateLayers, onChangeViewMode, onTogglePlay,
   onChangeSpeed, onResetToNow, onCameraPreset, onOpenTool }: {
-  currentDate: Date; cities: CityData[]; selectedCity: CityData | null;
+  reducedMotion: boolean; currentDate: Date; cities: CityData[]; selectedCity: CityData | null;
   layers: GlobeLayerSettings; viewMode: ViewMode; isPlaying: boolean; playbackSpeed: number;
   onSelectCity: (city: CityData | null) => void; onUpdateDate: (date: Date) => void;
   onUpdateLayers: (layers: Partial<GlobeLayerSettings>) => void;
@@ -140,6 +140,7 @@ export function MobileControls({ currentDate, cities, selectedCity, layers, view
         </div>}
 
         {sheet === 'time' && <div className="space-y-5">
+          {reducedMotion && <p className="text-xs text-slate-400">Reduced motion: playback steps once per second; automatic rotation is off.</p>}
           <label className="block text-sm">Simulation time (UTC)
             <input type="datetime-local" value={currentDate.toISOString().slice(0, 16)} min="1900-01-01T00:00" max="2100-12-31T23:59"
               onChange={event => { const date = new Date(`${event.target.value}Z`); if (Number.isFinite(date.getTime())) onUpdateDate(date); }}
@@ -156,15 +157,15 @@ export function MobileControls({ currentDate, cities, selectedCity, layers, view
                 onClick={() => onChangeSpeed(Number(value))}>{label}</button>
             ))}</div>
           </fieldset>
-          <div className="grid grid-cols-2 gap-2">{SOLAR_MILESTONES.map(milestone => <button key={milestone.id} className={button}
+          <div className="grid grid-cols-2 gap-2">{getSolarMilestones(currentDate.getUTCFullYear()).map(milestone => <button key={milestone.id} className={button}
             style={{ color: milestone.color }} onClick={() => {
-              const date = new Date(currentDate); date.setUTCMonth(milestone.month, milestone.day); onUpdateDate(date); setSheet(null);
+              onUpdateDate(new Date(milestone.date)); setSheet(null);
             }}>{milestone.name}</button>)}</div>
         </div>}
 
         {sheet === 'layers' && <div className="space-y-1">
           {LAYER_OPTIONS.map(([key, label]) => <label key={key} className="min-h-12 flex items-center justify-between gap-3 border-b border-slate-800 py-2 text-sm cursor-pointer">
-            {label}<input type="checkbox" checked={layers[key]} onChange={event => onUpdateLayers({ [key]: event.target.checked })} className="w-5 h-5 accent-sky-400 shrink-0" />
+            {label}<input type="checkbox" disabled={key === 'autoRotate' && reducedMotion} checked={key === 'autoRotate' && reducedMotion ? false : layers[key]} onChange={event => onUpdateLayers({ [key]: event.target.checked })} className="w-5 h-5 accent-sky-400 shrink-0" />
           </label>)}
           <label className="block pt-4 text-sm">Cloud opacity
             <input type="range" min="0" max="1" step="0.1" value={layers.cloudOpacity} onChange={event => onUpdateLayers({ cloudOpacity: Number(event.target.value) })} className="mt-3 w-full accent-sky-400" />
