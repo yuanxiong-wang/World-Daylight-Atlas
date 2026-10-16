@@ -9,7 +9,7 @@ for (const mobile of [false, true]) {
     if (mobile) await page.getByRole('button', { name: 'Tools', exact: true }).click();
     await page.getByRole('button', { name: 'Helix globe tour', exact: true }).click();
     const tour = page.getByRole('region', { name: 'Helix globe tour', exact: true });
-    await expect(tour.getByRole('heading', { name: 'Longyearbyen', exact: true })).toBeVisible();
+    await expect(tour.getByRole('heading', { name: 'Tromsø', exact: true })).toBeVisible();
     await expect(page.getByTestId('globe-viewport').locator('canvas')).toBeVisible();
     await expect(page.getByTestId('desktop-city-panel')).not.toBeVisible();
     await expect(page.getByTestId('mobile-navigation')).toHaveCount(0);
@@ -28,7 +28,7 @@ for (const mobile of [false, true]) {
     await expect(tour.getByRole('heading', { name: 'Ushuaia', exact: true })).toBeVisible();
     await expect(tour.getByRole('button', { name: 'Next stop' })).toBeDisabled();
     await page.keyboard.press('Home');
-    await expect(tour.getByRole('heading', { name: 'Longyearbyen', exact: true })).toBeVisible();
+    await expect(tour.getByRole('heading', { name: 'Tromsø', exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.keyboard.press('Escape');
     await expect(tour).toHaveCount(0);
