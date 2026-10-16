@@ -35,6 +35,14 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Browser interaction checks
         run: npm run test:e2e
+      - name: Print browser failure context
+        if: failure()
+        run: |
+          python - <<'PYTHON'
+          from pathlib import Path
+          for path in Path('test-results').rglob('error-context.md'):
+              print(path.read_text())
+          PYTHON
       - name: Save browser screenshots and traces
         if: always()
         uses: actions/upload-artifact@v4
