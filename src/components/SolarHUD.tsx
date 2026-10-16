@@ -16,7 +16,7 @@ import {
   Moon,
 } from 'lucide-react';
 import { SubsolarPoint, GlobeLayerSettings, CityData, ViewMode, LunarPhaseType } from '../types';
-import { getSolarPosition } from '../utils/solarCalculator';
+import { getSolarPosition, SOLAR_MILESTONES } from '../utils/solarCalculator';
 import { getLunarPhase } from '../utils/lunarCalculator';
 import { MoonPhaseBadge, MoonDiskSVG } from './MoonPhaseBadge';
 
@@ -393,34 +393,17 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
                     <span className="text-[11px] uppercase tracking-wider font-semibold">Seasonal Paths:</span>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                    <button
-                      onClick={() => handleJumpToSeason(2, 20)}
-                      className="px-2 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 font-medium transition-colors cursor-pointer flex items-center gap-1"
-                      title="Jump simulation date to March Equinox (March 20, δ=0°)"
-                    >
-                      <span>🌿</span> Mar 20 (Equinox)
-                    </button>
-                    <button
-                      onClick={() => handleJumpToSeason(5, 21)}
-                      className="px-2 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-medium transition-colors cursor-pointer flex items-center gap-1"
-                      title="Jump simulation date to June Solstice (June 21, δ=+23.44°)"
-                    >
-                      <span>☀️</span> Jun 21 (Solstice)
-                    </button>
-                    <button
-                      onClick={() => handleJumpToSeason(8, 22)}
-                      className="px-2 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 font-medium transition-colors cursor-pointer flex items-center gap-1"
-                      title="Jump simulation date to September Equinox (September 22, δ=0°)"
-                    >
-                      <span>🍁</span> Sep 22 (Equinox)
-                    </button>
-                    <button
-                      onClick={() => handleJumpToSeason(11, 21)}
-                      className="px-2 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-300 font-medium transition-colors cursor-pointer flex items-center gap-1"
-                      title="Jump simulation date to December Solstice (December 21, δ=-23.44°)"
-                    >
-                      <span>❄️</span> Dec 21 (Solstice)
-                    </button>
+                    {SOLAR_MILESTONES.map(milestone => (
+                      <button
+                        key={milestone.id}
+                        onClick={() => handleJumpToSeason(milestone.month, milestone.day)}
+                        className="px-2 py-1 rounded-lg bg-slate-800/70 hover:bg-slate-700 border font-medium transition-colors cursor-pointer"
+                        style={{ color: milestone.color, borderColor: milestone.color }}
+                        title={`Jump to ${milestone.name} (${milestone.month + 1}/${milestone.day})`}
+                      >
+                        {milestone.name} ({milestone.month + 1}/{milestone.day})
+                      </button>
+                    ))}
                   </div>
                 </div>
 

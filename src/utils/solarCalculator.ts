@@ -1,12 +1,34 @@
 import type { SubsolarPoint, SolarPosition, DaylightPhase, SolarTimes, LatitudeDaylightData } from '../types';
 
-/** Fixed-date seasonal benchmarks, named for the observer's hemisphere. */
-export function getObserverSeasonalDates(year: number, latitude: number) {
-  return {
-    summerDate: new Date(Date.UTC(year, latitude >= 0 ? 5 : 11, 21, 12)),
-    equinoxDate: new Date(Date.UTC(year, 2, 20, 12)),
-    winterDate: new Date(Date.UTC(year, latitude >= 0 ? 11 : 5, 21, 12)),
-  };
+export interface SolarMilestone {
+  id: 'march-equinox' | 'june-solstice' | 'september-equinox' | 'december-solstice';
+  name: string;
+  color: string;
+  month: number;
+  day: number;
+}
+
+// Month names remain correct in both hemispheres. These are approximate
+// calendar benchmarks, not calculated instants of the astronomical events.
+export const SOLAR_MILESTONES: readonly SolarMilestone[] = [
+  { id: 'march-equinox', name: 'March Equinox', color: '#10b981', month: 2, day: 20 },
+  { id: 'june-solstice', name: 'June Solstice', color: '#f59e0b', month: 5, day: 21 },
+  { id: 'september-equinox', name: 'September Equinox', color: '#a78bfa', month: 8, day: 22 },
+  { id: 'december-solstice', name: 'December Solstice', color: '#38bdf8', month: 11, day: 21 },
+];
+
+export function getSolarMilestones(year: number) {
+  return SOLAR_MILESTONES.map(milestone => ({
+    ...milestone, date: new Date(Date.UTC(year, milestone.month, milestone.day, 12)),
+  }));
+}
+
+export function getDailySolarCurve(latitude: number, longitude: number, date: Date) {
+  const midnight = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  return Array.from({ length: 49 }, (_, index) => ({
+    hour: index / 2,
+    elevation: getSolarPosition(latitude, longitude, new Date(midnight + index * 1800000)).elevation,
+  }));
 }
 
 /** Geometric solar-noon altitude extrema, including zenith crossings in the tropics. */
@@ -522,11 +544,11 @@ export function getGlobalDaylightDistribution(date: Date): {
  * Returns key seasonal dates for the current year
  */
 export function getSeasonalDates(year: number) {
-  return [
-    { label: 'March Equinox (Vernal)', date: new Date(Date.UTC(year, 2, 20, 12, 0, 0)), desc: 'Equal day and night globally (12h)' },
-    { label: 'June Solstice (Summer)', date: new Date(Date.UTC(year, 5, 21, 12, 0, 0)), desc: 'Longest day in North, 24h Arctic sun' },
-    { label: 'September Equinox (Autumn)', date: new Date(Date.UTC(year, 8, 22, 12, 0, 0)), desc: 'Equal day and night globally (12h)' },
-    { label: 'December Solstice (Winter)', date: new Date(Date.UTC(year, 11, 21, 12, 0, 0)), desc: 'Shortest day in North, 24h Antarctic sun' },
-  ];
+  return getSolarMilestones(year).map(milestone => ({
+    label: milestone.name,
+    date: milestone.date,
+    desc: milestone.id.includes('equinox')
+      ? 'Approximate equinox benchmark'
+      : 'Approximate solstice benchmark',
+  }));
 }
-

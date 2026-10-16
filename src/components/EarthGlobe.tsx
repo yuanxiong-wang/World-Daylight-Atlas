@@ -3,7 +3,12 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SubsolarPoint, CityData, GlobeLayerSettings } from '../types';
 import { createEarthTextures, createStarfield } from '../utils/earthTextures';
-import { getSolarPosition, getObserverSeasonalDates, getAnnualSolarAltitudeRange, splitSolarPath } from '../utils/solarCalculator';
+import { getSolarPosition, getSolarMilestones, getAnnualSolarAltitudeRange, splitSolarPath } from '../utils/solarCalculator';
+
+interface SolarPickPayload {
+  date: Date;
+  name: string;
+}
 
 interface EarthGlobeProps {
   currentDate: Date;
@@ -17,6 +22,7 @@ interface EarthGlobeProps {
   onUpdateLayers?: (newLayers: Partial<GlobeLayerSettings>) => void;
   activeCameraPreset: string | null;
   onResetCameraPreset: () => void;
+  onTriggerCameraPreset: (preset: string) => void;
 }
 
 export function latLngToVector3(lat: number, lng: number, radius: number): THREE.Vector3 {
@@ -223,7 +229,9 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
   onUpdateLayers,
   activeCameraPreset,
   onResetCameraPreset,
+  onTriggerCameraPreset,
 }) => {
+  const trajectoryPicksRef = useRef(new Map<THREE.Object3D, SolarPickPayload>());
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -616,6 +624,8 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     const group = sunTrajectoryGroupRef.current;
     if (!group) return;
 
+    trajectoryPicksRef.current.clear();
+
     // Clear previous trajectory objects
     while (group.children.length > 0) {
       const obj = group.children[0];
@@ -628,6 +638,14 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     }
 
     group.visible = true;
+
+    const addPickTarget = (position: THREE.Vector3, payload: SolarPickPayload) => {
+      const target = new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 8),
+        new THREE.MeshBasicMaterial({ visible: false }));
+      target.position.copy(position);
+      group.add(target);
+      trajectoryPicksRef.current.set(target, payload);
+    };
 
     // 1. Observer position on Earth surface
     const pObs = latLngToVector3(selectedCity.lat, selectedCity.lng, EARTH_RADIUS + 0.08);
@@ -758,216 +776,31 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     // Calculate Today's Solar Path
     const todayPath = computeDiurnalPath(currentDate, 96);
 
-    // 5. Render Seasonal Variation Benchmark Paths (Solstices & Equinoxes)
+    // Four shared benchmarks; every milestone has one typed pick target.
     if (layers.showSeasonalPaths) {
-      const year = currentDate.getUTCFullYear();
-      const { summerDate, equinoxDate, winterDate } = getObserverSeasonalDates(year, selectedCity.lat);
-
-      const summerPath = computeDiurnalPath(summerDate, 72);
-      const equinoxPath = computeDiurnalPath(equinoxDate, 72);
-      const winterPath = computeDiurnalPath(winterDate, 72);
-
-      // (A) Summer Solstice Path (Warm Golden-Amber Arc)
-      if (summerPath.daySegments.length > 0) {
-        for (const points of summerPath.daySegments) {
+      for (const milestone of getSolarMilestones(currentDate.getUTCFullYear())) {
+        const path = computeDiurnalPath(milestone.date, 72);
+        for (const points of path.daySegments) {
           const curve = new THREE.CatmullRomCurve3(points, false);
-          const tube = new THREE.Mesh(
-            new THREE.TubeGeometry(curve, 48, 0.18, 8, false),
-            new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.9 })
-          );
-          group.add(tube);
+          group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.18, 8, false),
+            new THREE.MeshBasicMaterial({ color: milestone.color, transparent: true, opacity: 0.9 })));
         }
-
-        // Apex marker & interactive label
-        const sApexMesh = new THREE.Mesh(
-          new THREE.SphereGeometry(0.65, 16, 16),
-          new THREE.MeshBasicMaterial({ color: 0xf59e0b })
-        );
-        sApexMesh.position.copy(summerPath.maxElevPt);
-        sApexMesh.userData = { isSeasonalMarker: true, date: summerDate, name: 'Summer Solstice' };
-        group.add(sApexMesh);
-
-        // Invisible larger hit mesh for effortless 3D clicking
-        const sHitMesh = new THREE.Mesh(
-          new THREE.SphereGeometry(1.8, 8, 8),
-          new THREE.MeshBasicMaterial({ visible: false })
-        );
-        sHitMesh.position.copy(summerPath.maxElevPt);
-        sHitMesh.userData = { isSeasonalMarker: true, date: summerDate, name: 'Summer Solstice' };
-        group.add(sHitMesh);
-
-        const sLabel = createLabelSprite(`☀️ Summer Solstice ${summerPath.maxElev.toFixed(1)}°`, '#f59e0b');
-        sLabel.position.copy(summerPath.maxElevPt.clone().addScaledVector(up, 1.8));
-        sLabel.scale.set(5.5, 1.375, 1);
-        sLabel.userData = { isSeasonalMarker: true, date: summerDate, name: 'Summer Solstice' };
-        group.add(sLabel);
-      }
-      for (const points of summerPath.nightSegments) {
-        const nGeo = new THREE.BufferGeometry().setFromPoints(points);
-        const nMat = new THREE.LineDashedMaterial({ color: 0xf59e0b, dashSize: 0.8, gapSize: 0.8, transparent: true, opacity: 0.35 });
-        const nLine = new THREE.Line(nGeo, nMat);
-        nLine.computeLineDistances();
-        group.add(nLine);
-      }
-
-      // (B) Equinox Path (Emerald Green Arc) - passes through exact East and West
-      if (equinoxPath.daySegments.length > 0) {
-        for (const points of equinoxPath.daySegments) {
-          const curve = new THREE.CatmullRomCurve3(points, false);
-          const tube = new THREE.Mesh(
-            new THREE.TubeGeometry(curve, 48, 0.18, 8, false),
-            new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.9 })
-          );
-          group.add(tube);
+        for (const points of path.nightSegments) {
+          const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),
+            new THREE.LineDashedMaterial({ color: milestone.color, dashSize: 0.8, gapSize: 0.8,
+              transparent: true, opacity: 0.35 }));
+          line.computeLineDistances();
+          group.add(line);
         }
-
-        // Apex marker & interactive label
-        const eqApexMesh = new THREE.Mesh(
-          new THREE.SphereGeometry(0.65, 16, 16),
-          new THREE.MeshBasicMaterial({ color: 0x10b981 })
-        );
-        eqApexMesh.position.copy(equinoxPath.maxElevPt);
-        eqApexMesh.userData = { isSeasonalMarker: true, date: equinoxDate, name: 'Equinox' };
-        group.add(eqApexMesh);
-
-        // Invisible larger hit mesh
-        const eqHitMesh = new THREE.Mesh(
-          new THREE.SphereGeometry(1.8, 8, 8),
-          new THREE.MeshBasicMaterial({ visible: false })
-        );
-        eqHitMesh.position.copy(equinoxPath.maxElevPt);
-        eqHitMesh.userData = { isSeasonalMarker: true, date: equinoxDate, name: 'Equinox' };
-        group.add(eqHitMesh);
-
-        const eqLabel = createLabelSprite(`🌿 Equinox ${equinoxPath.maxElev.toFixed(1)}°`, '#10b981');
-        eqLabel.position.copy(equinoxPath.maxElevPt.clone().addScaledVector(up, 1.8));
-        eqLabel.scale.set(5.0, 1.25, 1);
-        eqLabel.userData = { isSeasonalMarker: true, date: equinoxDate, name: 'Equinox' };
-        group.add(eqLabel);
-      }
-      for (const points of equinoxPath.nightSegments) {
-        const nGeo = new THREE.BufferGeometry().setFromPoints(points);
-        const nMat = new THREE.LineDashedMaterial({ color: 0x10b981, dashSize: 0.8, gapSize: 0.8, transparent: true, opacity: 0.35 });
-        const nLine = new THREE.Line(nGeo, nMat);
-        nLine.computeLineDistances();
-        group.add(nLine);
-      }
-
-      // (C) Winter Solstice Path (Ice Cyan Arc)
-      if (winterPath.daySegments.length > 0) {
-        for (const points of winterPath.daySegments) {
-          const curve = new THREE.CatmullRomCurve3(points, false);
-          const tube = new THREE.Mesh(
-            new THREE.TubeGeometry(curve, 48, 0.18, 8, false),
-            new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.9 })
-          );
-          group.add(tube);
-        }
-
-        // Apex marker & interactive label
-        const wApexMesh = new THREE.Mesh(
-          new THREE.SphereGeometry(0.65, 16, 16),
-          new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
-        );
-        wApexMesh.position.copy(winterPath.maxElevPt);
-        wApexMesh.userData = { isSeasonalMarker: true, date: winterDate, name: 'Winter Solstice' };
-        group.add(wApexMesh);
-
-        // Invisible larger hit mesh
-        const wHitMesh = new THREE.Mesh(
-          new THREE.SphereGeometry(1.8, 8, 8),
-          new THREE.MeshBasicMaterial({ visible: false })
-        );
-        wHitMesh.position.copy(winterPath.maxElevPt);
-        wHitMesh.userData = { isSeasonalMarker: true, date: winterDate, name: 'Winter Solstice' };
-        group.add(wHitMesh);
-
-        const wLabel = createLabelSprite(`❄️ Winter Solstice ${winterPath.maxElev.toFixed(1)}°`, '#38bdf8');
-        wLabel.position.copy(winterPath.maxElevPt.clone().addScaledVector(up, 1.8));
-        wLabel.scale.set(5.5, 1.375, 1);
-        wLabel.userData = { isSeasonalMarker: true, date: winterDate, name: 'Winter Solstice' };
-        group.add(wLabel);
-      }
-      for (const points of winterPath.nightSegments) {
-        const nGeo = new THREE.BufferGeometry().setFromPoints(points);
-        const nMat = new THREE.LineDashedMaterial({ color: 0x38bdf8, dashSize: 0.8, gapSize: 0.8, transparent: true, opacity: 0.35 });
-        const nLine = new THREE.Line(nGeo, nMat);
-        nLine.computeLineDistances();
-        group.add(nLine);
-      }
-
-      // (D) Solar Noon Meridian Guideline (Connecting Winter -> Equinox -> Today -> Summer peak altitudes)
-      const noonPts = [winterPath.maxElevPt, equinoxPath.maxElevPt, todayPath.maxElevPt, summerPath.maxElevPt]
-        .sort((a, b) => a.clone().sub(pObs).dot(up) - b.clone().sub(pObs).dot(up));
-      
-      const noonLineGeo = new THREE.BufferGeometry().setFromPoints(noonPts);
-      const noonLineMat = new THREE.LineDashedMaterial({
-        color: 0xffffff,
-        dashSize: 0.5,
-        gapSize: 0.5,
-        transparent: true,
-        opacity: 0.7,
-      });
-      const noonLine = new THREE.Line(noonLineGeo, noonLineMat);
-      noonLine.computeLineDistances();
-      group.add(noonLine);
-
-      // (D2) Seasonal Altitude Variation Range Callout Label along meridian
-      if (annualRange && annualRange.range > 1) {
-        const deltaDeg = annualRange.range;
-        const midPoint = summerPath.maxElevPt.clone().add(winterPath.maxElevPt).multiplyScalar(0.5);
-        const deltaLabel = createLabelSprite(`↕ Seasonal Range: Δ${deltaDeg.toFixed(1)}°`, '#f8fafc', 'rgba(15, 23, 42, 0.9)');
-        deltaLabel.position.copy(midPoint.clone().addScaledVector(north, -1.5).addScaledVector(up, 1.2));
-        deltaLabel.scale.set(6.2, 1.55, 1);
-        group.add(deltaLabel);
-      }
-
-      // (E) Translucent Solar Envelope Mesh (The annual sky envelope between Winter & Summer paths)
-      if (summerPath.daySegments.length > 0 && winterPath.daySegments.length > 0) {
-        const envelopeGeo = new THREE.BufferGeometry();
-        const envPositions: number[] = [];
-        const envIndices: number[] = [];
-
-        // Match sample points between summer and winter
-        const minLen = Math.min(summerPath.allPts.length, winterPath.allPts.length);
-        let vertexCount = 0;
-        let previousIncluded = false;
-
-        for (let i = 0; i < minLen; i++) {
-          const pSummer = summerPath.allPts[i];
-          const pWinter = winterPath.allPts[i];
-
-          // Only create mesh faces if at least one is above horizon
-          if (pSummer.elev >= -5 || pWinter.elev >= -5) {
-            envPositions.push(pWinter.pt.x, pWinter.pt.y, pWinter.pt.z);
-            envPositions.push(pSummer.pt.x, pSummer.pt.y, pSummer.pt.z);
-
-            if (previousIncluded) {
-              const base = vertexCount - 2;
-              envIndices.push(base, base + 1, base + 2);
-              envIndices.push(base + 1, base + 3, base + 2);
-            }
-            vertexCount += 2;
-            previousIncluded = true;
-          } else {
-            previousIncluded = false;
-          }
-        }
-
-        if (envPositions.length > 0) {
-          envelopeGeo.setAttribute('position', new THREE.Float32BufferAttribute(envPositions, 3));
-          envelopeGeo.setIndex(envIndices);
-          envelopeGeo.computeVertexNormals();
-
-          const envMat = new THREE.MeshBasicMaterial({
-            color: 0xf59e0b,
-            transparent: true,
-            opacity: 0.07,
-            side: THREE.DoubleSide,
-            depthWrite: false,
-          });
-          group.add(new THREE.Mesh(envelopeGeo, envMat));
-        }
+        const apex = new THREE.Mesh(new THREE.SphereGeometry(0.65, 16, 16),
+          new THREE.MeshBasicMaterial({ color: milestone.color }));
+        apex.position.copy(path.maxElevPt);
+        group.add(apex);
+        addPickTarget(path.maxElevPt, { date: path.maxElevDate, name: milestone.name });
+        const label = createLabelSprite(`${milestone.name} ${path.maxElev.toFixed(1)}°`, milestone.color);
+        label.position.copy(path.maxElevPt.clone().addScaledVector(up, 1.8));
+        label.scale.set(5.5, 1.375, 1);
+        group.add(label);
       }
     }
 
@@ -1011,17 +844,9 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       const apexMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
       const apexMesh = new THREE.Mesh(apexGeo, apexMat);
       apexMesh.position.copy(todayPath.maxElevPt);
-      apexMesh.userData = { isSeasonalMarker: true, date: todayPath.maxElevDate, name: "Today's Solar Noon" };
       group.add(apexMesh);
 
-      // Hit area
-      const todayHitMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(1.8, 8, 8),
-        new THREE.MeshBasicMaterial({ visible: false })
-      );
-      todayHitMesh.position.copy(todayPath.maxElevPt);
-      todayHitMesh.userData = { isSeasonalMarker: true, date: todayPath.maxElevDate, name: "Today's Solar Noon" };
-      group.add(todayHitMesh);
+      addPickTarget(todayPath.maxElevPt, { date: todayPath.maxElevDate, name: "Today's Solar Noon" });
 
       const dropGeo = new THREE.BufferGeometry().setFromPoints([pObs, todayPath.maxElevPt]);
       const dropMat = new THREE.LineDashedMaterial({
@@ -1042,7 +867,6 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       });
       const apexLabel = createLabelSprite(`📍 Today's Noon ${todayPath.maxElev.toFixed(1)}° (${noonTimeStr})`, '#fde047');
       apexLabel.position.copy(todayPath.maxElevPt.clone().addScaledVector(up, 2.5));
-      apexLabel.userData = { isSeasonalMarker: true, date: todayPath.maxElevDate, name: "Today's Solar Noon" };
       group.add(apexLabel);
     }
 
@@ -1111,7 +935,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     curSunLabel.position.copy(curSunPos.clone().addScaledVector(up, 2.2));
     group.add(curSunLabel);
 
-  }, [selectedCity, currentDate, layers.showSunTrajectory, layers.showSeasonalPaths, annualRange]);
+  }, [selectedCity, currentDate, layers.showSunTrajectory, layers.showSeasonalPaths]);
 
   // Update Layer Toggles
   useEffect(() => {
@@ -1200,18 +1024,13 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(mouse, cameraRef.current);
 
-      // Check 3D Seasonal Trajectory Markers & Apexes first (jump to solstice/equinox date)
-      if (sunTrajectoryGroupRef.current && onSelectDate) {
-        const trajectoryIntersects = raycaster.intersectObjects(sunTrajectoryGroupRef.current.children, true);
-        if (trajectoryIntersects.length > 0) {
-          let node: THREE.Object3D | null = trajectoryIntersects[0].object;
-          while (node && !node.userData?.date && node !== sunTrajectoryGroupRef.current) {
-            node = node.parent;
-          }
-          if (node && node.userData?.date) {
-            onSelectDate(node.userData.date as Date);
-            return;
-          }
+      // Only registered hit spheres can select a milestone; decorative geometry is ignored.
+      if (sunTrajectoryGroupRef.current?.visible && onSelectDate) {
+        const hits = raycaster.intersectObjects([...trajectoryPicksRef.current.keys()], false);
+        const payload = hits.length ? trajectoryPicksRef.current.get(hits[0].object) : undefined;
+        if (payload) {
+          onSelectDate(new Date(payload.date));
+          return;
         }
       }
 
@@ -1253,7 +1072,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
         }
       }
     },
-    [onSelectCity]
+    [onSelectCity, onSelectDate]
   );
 
   // Smooth Camera Presets
@@ -1300,37 +1119,21 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
   // Compute selected city's current solar data
   const citySolar = selectedCity ? getSolarPosition(selectedCity.lat, selectedCity.lng, currentDate) : null;
 
-  // Compute seasonal benchmark data (Solstices & Equinoxes) for the selected city
   const seasonalMetrics = useMemo(() => {
-    if (!selectedCity) return null;
-    const year = currentDate.getUTCFullYear();
-    
-    // Approximate UTC solar noon hour: 12 - (lng / 15)
-    const solarNoonHourUtc = ((12 - selectedCity.lng / 15) % 24 + 24) % 24;
-    const noonH = Math.floor(solarNoonHourUtc);
-    const noonM = Math.floor((solarNoonHourUtc % 1) * 60);
-
-    const { summerDate, equinoxDate, winterDate } = getObserverSeasonalDates(year, selectedCity.lat);
-    for (const date of [summerDate, equinoxDate, winterDate]) date.setUTCHours(noonH, noonM, 0, 0);
-
-    const sPos = getSolarPosition(selectedCity.lat, selectedCity.lng, summerDate);
-    const eqPos = getSolarPosition(selectedCity.lat, selectedCity.lng, equinoxDate);
-    const wPos = getSolarPosition(selectedCity.lat, selectedCity.lng, winterDate);
-
-    // Shared annual extrema also include tropical zenith crossings.
-    const deltaRange = annualRange?.range ?? 0;
-
-    return {
-      summerDate,
-      equinoxDate,
-      winterDate,
-      summerPeak: sPos.elevation,
-      equinoxPeak: eqPos.elevation,
-      winterPeak: wPos.elevation,
-      deltaRange,
-      isNorthern: selectedCity.lat >= 0,
-    };
-  }, [selectedCity, currentDate, annualRange]);
+    if (!selectedCity) return [];
+    return getSolarMilestones(solarYear).map(milestone => {
+      const midnight = new Date(milestone.date);
+      midnight.setUTCHours(0, 0, 0, 0);
+      let peak = -90;
+      let peakDate = milestone.date;
+      for (let i = 0; i <= 72; i++) {
+        const date = new Date(midnight.getTime() + i * 1200000);
+        const elevation = getSolarPosition(selectedCity.lat, selectedCity.lng, date).elevation;
+        if (elevation > peak) { peak = elevation; peakDate = date; }
+      }
+      return { ...milestone, peak, peakDate };
+    });
+  }, [selectedCity, solarYear]);
 
   return (
     <div className="relative w-full h-full select-none overflow-hidden bg-slate-950">
@@ -1343,7 +1146,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
 
       {/* Selected Location / City Floating Panel with Interactive 3D Sun Path & Seasonal Controls */}
       {selectedCity && citySolar && (
-        <div className="absolute top-20 right-6 z-20 pointer-events-auto bg-slate-900/92 backdrop-blur-md border border-slate-700/80 rounded-2xl p-4 shadow-2xl text-white w-80 max-w-[calc(100vw-3rem)] transition-all">
+        <div className="absolute top-20 right-6 z-20 pointer-events-auto bg-slate-900/92 backdrop-blur-md border border-slate-700/80 rounded-2xl p-4 shadow-2xl text-white w-80 max-w-[calc(100vw-3rem)] max-h-[calc(100vh-6rem)] overflow-y-auto transition-all">
           {/* Header */}
           <div className="flex items-start justify-between gap-3 mb-2.5">
             <div>
@@ -1396,7 +1199,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
           </div>
 
           {/* Interactive Seasonal Sun Path Comparison Section */}
-          {seasonalMetrics && (
+          {seasonalMetrics.length > 0 && (
             <div className="mt-3 bg-slate-950/60 border border-slate-800 rounded-xl p-2.5 space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-amber-300 flex items-center gap-1">
@@ -1417,89 +1220,28 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
                 )}
               </div>
 
-              {/* Solstices & Equinox Peak Altitude Comparison */}
               <div className="space-y-1.5 text-[11px]">
-                {/* Summer Solstice */}
-                <div className="flex items-center justify-between p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-amber-400 font-bold">☀️</span>
-                    <div>
-                      <span className="font-semibold text-amber-200 block leading-tight">Summer Solstice</span>
-                      <span className="text-[10px] text-amber-400/80 font-mono">{seasonalMetrics.isNorthern ? 'Jun 21 • δ=+23.4°' : 'Dec 21 • δ=-23.4°'}</span>
+                {seasonalMetrics.map(milestone => (
+                  <div key={milestone.id} className="flex items-center justify-between p-1.5 rounded-lg bg-slate-800/50 border border-slate-700">
+                    <div style={{ color: milestone.color }}>
+                      <span className="font-semibold block">{milestone.name}</span>
+                      <span className="text-[10px] font-mono">{milestone.month + 1}/{milestone.day}</span>
+                    </div>
+                    <div className="flex items-center gap-2" style={{ color: milestone.color }}>
+                      <span className="font-mono font-bold">{milestone.peak.toFixed(1)}°</span>
+                      {onSelectDate && <button onClick={() => onSelectDate(milestone.peakDate)}
+                        className="px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 cursor-pointer"
+                        title={`Jump to ${milestone.name}`}>Jump →</button>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-amber-300">
-                      {seasonalMetrics.summerPeak.toFixed(1)}°
-                    </span>
-                    {onSelectDate && (
-                      <button
-                        onClick={() => onSelectDate(seasonalMetrics.summerDate)}
-                        className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-semibold transition-colors cursor-pointer"
-                        title="Jump simulation date to Summer Solstice"
-                      >
-                        Jump →
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Equinox */}
-                <div className="flex items-center justify-between p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-emerald-400 font-bold">🌿</span>
-                    <div>
-                      <span className="font-semibold text-emerald-200 block leading-tight">Equinox</span>
-                      <span className="text-[10px] text-emerald-400/80 font-mono">Mar 20 / Sep 22 • δ=0°</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-emerald-300">
-                      {seasonalMetrics.equinoxPeak.toFixed(1)}°
-                    </span>
-                    {onSelectDate && (
-                      <button
-                        onClick={() => onSelectDate(seasonalMetrics.equinoxDate)}
-                        className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[10px] font-semibold transition-colors cursor-pointer"
-                        title="Jump simulation date to March Equinox"
-                      >
-                        Jump →
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Winter Solstice */}
-                <div className="flex items-center justify-between p-1.5 rounded-lg bg-sky-500/10 border border-sky-500/20">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sky-400 font-bold">❄️</span>
-                    <div>
-                      <span className="font-semibold text-sky-200 block leading-tight">Winter Solstice</span>
-                      <span className="text-[10px] text-sky-400/80 font-mono">{seasonalMetrics.isNorthern ? 'Dec 21 • δ=-23.4°' : 'Jun 21 • δ=+23.4°'}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-sky-300">
-                      {seasonalMetrics.winterPeak.toFixed(1)}°
-                    </span>
-                    {onSelectDate && (
-                      <button
-                        onClick={() => onSelectDate(seasonalMetrics.winterDate)}
-                        className="px-2 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-[10px] font-semibold transition-colors cursor-pointer"
-                        title="Jump simulation date to Winter Solstice"
-                      >
-                        Jump →
-                      </button>
-                    )}
-                  </div>
-                </div>
+                ))}
               </div>
 
               {/* Seasonal Range Altitude Swing Badge */}
               <div className="pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-300 font-mono">
                 <span>Annual Altitude Range:</span>
                 <span className="text-amber-400 font-bold bg-amber-500/15 px-1.5 py-0.5 rounded">
-                  Δ {seasonalMetrics.deltaRange.toFixed(1)}° Swing
+                  Δ {(annualRange?.range ?? 0).toFixed(1)}° Swing
                 </span>
               </div>
             </div>
@@ -1508,7 +1250,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
           {/* Action buttons */}
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
-              onClick={() => onResetCameraPreset()}
+              onClick={() => onTriggerCameraPreset('focus-trajectory')}
               className="py-1.5 px-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
               title="View full diurnal & seasonal sky dome in 3D"
             >

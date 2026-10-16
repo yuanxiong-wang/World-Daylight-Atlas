@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { CityData } from '../types';
-import { getSolarPosition, getSolarTimes, getObserverSeasonalDates, getAnnualSolarAltitudeRange } from '../utils/solarCalculator';
+import { getSolarPosition, getSolarTimes, getSolarMilestones, getDailySolarCurve, getAnnualSolarAltitudeRange } from '../utils/solarCalculator';
 
 interface CityInspectorModalProps {
   city: CityData;
@@ -23,22 +23,8 @@ export const CityInspectorModal: React.FC<CityInspectorModalProps> = ({
   // Solar daily times (sunrise, sunset, noon, twilights)
   const solarTimes = useMemo(() => getSolarTimes(city.lat, city.lng, currentDate), [city, currentDate]);
 
-  // Helper to generate 24-hour solar curve for a specific day
-  const generate24hCurve = (d: Date) => {
-    const points: { hour: number; elevation: number }[] = [];
-    const baseDate = new Date(d);
-    baseDate.setUTCHours(0, 0, 0, 0);
-
-    for (let h = 0; h <= 24; h += 0.5) {
-      const sampleDate = new Date(baseDate.getTime() + h * 3600000);
-      const pos = getSolarPosition(city.lat, city.lng, sampleDate);
-      points.push({ hour: h, elevation: pos.elevation });
-    }
-    return points;
-  };
-
-  // Generate 24-hour elevation curve points for today
-  const dailyCurve = useMemo(() => generate24hCurve(currentDate), [city, currentDate]);
+  const dailyCurve = useMemo(() => getDailySolarCurve(city.lat, city.lng, currentDate), [city, currentDate]);
+  const dailyPeak = Math.max(...dailyCurve.map(point => point.elevation));
 
   const year = currentDate.getUTCFullYear();
   const annualRange = useMemo(() => getAnnualSolarAltitudeRange(city.lat, year), [city.lat, year]);
@@ -46,37 +32,15 @@ export const CityInspectorModal: React.FC<CityInspectorModalProps> = ({
     month: 'short', day: 'numeric', timeZone: 'UTC',
   });
 
-  // Generate seasonal benchmark curves (Solstices & Equinox)
-  const seasonalData = useMemo(() => {
-    const year = currentDate.getUTCFullYear();
-    const { summerDate, equinoxDate, winterDate } = getObserverSeasonalDates(year, city.lat);
-
-    const summerCurve = generate24hCurve(summerDate);
-    const equinoxCurve = generate24hCurve(equinoxDate);
-    const winterCurve = generate24hCurve(winterDate);
-
-    const summerTimes = getSolarTimes(city.lat, city.lng, summerDate);
-    const equinoxTimes = getSolarTimes(city.lat, city.lng, equinoxDate);
-    const winterTimes = getSolarTimes(city.lat, city.lng, winterDate);
-
-    const summerPeak = Math.max(...summerCurve.map((p) => p.elevation));
-    const equinoxPeak = Math.max(...equinoxCurve.map((p) => p.elevation));
-    const winterPeak = Math.max(...winterCurve.map((p) => p.elevation));
-
+  const seasonalData = useMemo(() => getSolarMilestones(year).map(milestone => {
+    const curve = getDailySolarCurve(city.lat, city.lng, milestone.date);
     return {
-      summerDate,
-      winterDate,
-      summerCurve,
-      equinoxCurve,
-      winterCurve,
-      summerTimes,
-      equinoxTimes,
-      winterTimes,
-      summerPeak,
-      equinoxPeak,
-      winterPeak,
+      ...milestone,
+      curve,
+      peak: Math.max(...curve.map(point => point.elevation)),
+      times: getSolarTimes(city.lat, city.lng, milestone.date),
     };
-  }, [city, currentDate]);
+  }), [city, year]);
 
   // Helper to format local city time
   const formatCityTime = (d: Date | null) => {
@@ -116,9 +80,6 @@ export const CityInspectorModal: React.FC<CityInspectorModalProps> = ({
   };
 
   const curveD = useMemo(() => buildSvgPath(dailyCurve), [dailyCurve]);
-  const summerCurveD = useMemo(() => buildSvgPath(seasonalData.summerCurve), [seasonalData]);
-  const equinoxCurveD = useMemo(() => buildSvgPath(seasonalData.equinoxCurve), [seasonalData]);
-  const winterCurveD = useMemo(() => buildSvgPath(seasonalData.winterCurve), [seasonalData]);
 
   // Current time position in UTC hours
   const currentUtcHour = currentDate.getUTCHours() + currentDate.getUTCMinutes() / 60;
@@ -289,37 +250,10 @@ export const CityInspectorModal: React.FC<CityInspectorModalProps> = ({
                 })}
 
                 {/* Seasonal Benchmark Curves */}
-                {showSeasonalCurves && (
-                  <>
-                    {/* Summer Solstice (Amber dashed) */}
-                    <path
-                      d={summerCurveD}
-                      fill="none"
-                      stroke="#f59e0b"
-                      strokeWidth={1.75}
-                      strokeDasharray="4 3"
-                      opacity={0.85}
-                    />
-                    {/* Equinox (Emerald dashed) */}
-                    <path
-                      d={equinoxCurveD}
-                      fill="none"
-                      stroke="#10b981"
-                      strokeWidth={1.75}
-                      strokeDasharray="4 3"
-                      opacity={0.85}
-                    />
-                    {/* Winter Solstice (Cyan dashed) */}
-                    <path
-                      d={winterCurveD}
-                      fill="none"
-                      stroke="#38bdf8"
-                      strokeWidth={1.75}
-                      strokeDasharray="4 3"
-                      opacity={0.85}
-                    />
-                  </>
-                )}
+                {showSeasonalCurves && seasonalData.map(milestone => (
+                  <path key={milestone.id} d={buildSvgPath(milestone.curve)} fill="none"
+                    stroke={milestone.color} strokeWidth={1.75} strokeDasharray="4 3" opacity={0.85} />
+                ))}
 
                 {/* Today's Solar Trajectory Curve (Thick glowing gold) */}
                 <path d={curveD} fill="none" stroke="#fde047" strokeWidth={3} strokeLinecap="round" />
@@ -331,23 +265,16 @@ export const CityInspectorModal: React.FC<CityInspectorModalProps> = ({
 
             {/* Legend */}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] border-t border-slate-800">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <span className="flex items-center gap-1 text-amber-300 font-semibold">
                   <span className="w-3 h-1 bg-yellow-300 rounded-full inline-block"></span> Today's Path
                 </span>
-                {showSeasonalCurves && (
-                  <>
-                    <span className="flex items-center gap-1 text-amber-400">
-                      <span className="w-3 h-0.5 border-t border-amber-500 border-dashed inline-block"></span> Summer ({formatSeasonDate(seasonalData.summerDate)})
-                    </span>
-                    <span className="flex items-center gap-1 text-emerald-400">
-                      <span className="w-3 h-0.5 border-t border-emerald-500 border-dashed inline-block"></span> Equinox (Mar 20)
-                    </span>
-                    <span className="flex items-center gap-1 text-sky-400">
-                      <span className="w-3 h-0.5 border-t border-sky-400 border-dashed inline-block"></span> Winter ({formatSeasonDate(seasonalData.winterDate)})
-                    </span>
-                  </>
-                )}
+                {showSeasonalCurves && seasonalData.map(milestone => (
+                  <span key={milestone.id} className="flex items-center gap-1" style={{ color: milestone.color }}>
+                    <span className="w-3 border-t border-dashed" style={{ borderColor: milestone.color }}></span>
+                    {milestone.name} ({formatSeasonDate(milestone.date)})
+                  </span>
+                ))}
               </div>
               <span className="text-slate-400 font-mono">
                 Annual Swing: <strong className="text-amber-400">Δ {annualRange.range.toFixed(1)}°</strong>
@@ -375,43 +302,23 @@ export const CityInspectorModal: React.FC<CityInspectorModalProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 text-slate-200">
-                  <tr className="hover:bg-amber-500/5">
-                    <td className="py-1 text-amber-300 font-semibold">☀️ Summer Solstice</td>
-                    <td className="py-1 text-slate-400">{formatSeasonDate(seasonalData.summerDate)}</td>
-                    <td className="py-1 text-right text-amber-400 font-bold">
-                      {seasonalData.summerPeak > 0 ? `+${seasonalData.summerPeak.toFixed(1)}°` : `${seasonalData.summerPeak.toFixed(1)}°`}
-                    </td>
-                    <td className="py-1 text-right text-emerald-400">
-                      {formatDayLength(seasonalData.summerTimes)}
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-emerald-500/5">
-                    <td className="py-1 text-emerald-300 font-semibold">🌿 Equinox</td>
-                    <td className="py-1 text-slate-400">March 20</td>
-                    <td className="py-1 text-right text-emerald-400 font-bold">
-                      {seasonalData.equinoxPeak > 0 ? `+${seasonalData.equinoxPeak.toFixed(1)}°` : `${seasonalData.equinoxPeak.toFixed(1)}°`}
-                    </td>
-                    <td className="py-1 text-right text-emerald-400">
-                      {formatDayLength(seasonalData.equinoxTimes)}
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-sky-500/5">
-                    <td className="py-1 text-sky-300 font-semibold">❄️ Winter Solstice</td>
-                    <td className="py-1 text-slate-400">{formatSeasonDate(seasonalData.winterDate)}</td>
-                    <td className="py-1 text-right text-sky-400 font-bold">
-                      {seasonalData.winterPeak > 0 ? `+${seasonalData.winterPeak.toFixed(1)}°` : `${seasonalData.winterPeak.toFixed(1)}°`}
-                    </td>
-                    <td className="py-1 text-right text-sky-400">
-                      {formatDayLength(seasonalData.winterTimes)}
-                    </td>
-                  </tr>
+                  {seasonalData.map(milestone => (
+                    <tr key={milestone.id} className="hover:bg-slate-800/50">
+                      <td className="py-1 font-semibold" style={{ color: milestone.color }}>{milestone.name}</td>
+                      <td className="py-1 text-slate-400">{formatSeasonDate(milestone.date)}</td>
+                      <td className="py-1 text-right font-bold" style={{ color: milestone.color }}>
+                        {milestone.peak > 0 ? '+' : ''}{milestone.peak.toFixed(1)}°
+                      </td>
+                      <td className="py-1 text-right text-emerald-400">{formatDayLength(milestone.times)}</td>
+                    </tr>
+                  ))}
                   <tr className="bg-slate-900/40">
                     <td className="py-1 text-yellow-300 font-bold">📍 Current Day</td>
                     <td className="py-1 text-slate-400">
                       {currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </td>
                     <td className="py-1 text-right text-yellow-300 font-bold">
-                      {solarPos.elevation > 0 ? `+${solarPos.elevation.toFixed(1)}°` : `${solarPos.elevation.toFixed(1)}°`}
+                      {dailyPeak > 0 ? '+' : ''}{dailyPeak.toFixed(1)}°
                     </td>
                     <td className="py-1 text-right text-emerald-400 font-bold">
                       {formatDayLength(solarTimes)}
