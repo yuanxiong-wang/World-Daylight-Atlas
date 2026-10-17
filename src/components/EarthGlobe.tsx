@@ -1213,7 +1213,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
 
       {/* Selected Location / City Floating Panel with Interactive 3D Sun Path & Seasonal Controls */}
       {selectedCity && citySolar && (
-        <div data-testid="desktop-city-panel" style={tour ? { display: 'none' } : undefined} className="hidden lg:block absolute top-20 right-6 z-20 pointer-events-auto bg-slate-900/92 backdrop-blur-md border border-slate-700/80 rounded-2xl p-4 shadow-2xl text-white w-80 max-w-[calc(100vw-3rem)] max-h-[calc(100vh-15rem)] sm:max-h-[calc(100vh-6rem)] overflow-y-auto transition-all">
+        <div data-testid="desktop-city-panel" style={tour ? { display: 'none' } : undefined} className="hidden lg:block absolute top-20 right-6 z-20 pointer-events-auto bg-slate-900/92 backdrop-blur-md border border-slate-700/80 rounded-2xl p-4 shadow-2xl text-white w-80 max-w-[calc(100vw-3rem)] max-h-[calc(100dvh-6.5rem)] overflow-y-auto overscroll-contain">
           {/* Header */}
           <div className="flex items-start justify-between gap-3 mb-2.5">
             <div>

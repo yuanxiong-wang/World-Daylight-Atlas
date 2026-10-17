@@ -180,16 +180,15 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
       </header>
 
       {/* Unified Bottom Control Dock (Adheres strictly to Three.js Ergonomic Bottom Dock Specification) */}
-      <div
-        className={`hidden lg:block fixed bottom-5 left-1/2 -translate-x-1/2 z-30 w-full max-w-4xl px-4 transition-transform duration-300 ease-in-out ${
-          isCollapsed ? 'translate-y-[calc(100%-38px)]' : 'translate-y-0'
-        }`}
+      <div data-testid="desktop-dock"
+        className="hidden lg:block fixed bottom-5 left-4 right-4 z-30 max-w-4xl mx-auto"
+        style={{ right: viewMode === '3d-globe' && selectedCity ? '22.5rem' : '1rem' }}
       >
-        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col text-slate-200">
+        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col text-slate-200 max-h-[calc(100dvh-10rem)]">
           {/* Dock Header Bar with Collapse Toggle & Navigation Tabs */}
-          <div className="px-4 py-2 bg-slate-950/60 border-b border-slate-800 flex items-center justify-between">
+          <div className="shrink-0 px-4 py-2 bg-slate-950/60 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
             {/* Tabs */}
-            <div className="flex items-center gap-1">
+            <div className="flex flex-1 min-w-0 flex-wrap items-center gap-1">
               <button
                 onClick={() => {
                   setActiveTab('timeline');
@@ -271,7 +270,7 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
             {/* Collapse / Expand Toggle Button */}
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="text-slate-400 hover:text-white px-2 py-1 rounded-lg hover:bg-slate-800 flex items-center gap-1 text-xs cursor-pointer"
+              className="shrink-0 text-slate-400 hover:text-white px-2 py-1 rounded-lg hover:bg-slate-800 flex items-center gap-1 text-xs cursor-pointer"
               title={isCollapsed ? 'Show Controls (H)' : 'Hide Controls (H)'}
             >
               {isCollapsed ? (
@@ -289,7 +288,7 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
           </div>
 
           {/* Dock Content Body */}
-          <div className="p-4">
+          <div hidden={isCollapsed} data-testid="desktop-dock-content" className="min-h-0 overflow-auto overscroll-contain p-4">
             {/* TAB 1: TIMELINE & SIMULATION */}
             {activeTab === 'timeline' && (
               <div className="space-y-3">
