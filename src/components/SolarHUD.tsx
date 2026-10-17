@@ -184,7 +184,7 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
         className="hidden lg:block fixed bottom-5 left-4 right-4 z-30 max-w-4xl mx-auto"
         style={{ right: viewMode === '3d-globe' && selectedCity ? '22.5rem' : '1rem' }}
       >
-        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col text-slate-200 max-h-[calc(100dvh-10rem)]">
+        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col text-slate-200 max-h-[calc(100dvh-13rem)]">
           {/* Dock Header Bar with Collapse Toggle & Navigation Tabs */}
           <div className="shrink-0 px-4 py-2 bg-slate-950/60 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
             {/* Tabs */}

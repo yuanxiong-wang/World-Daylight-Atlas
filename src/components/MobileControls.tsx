@@ -10,7 +10,7 @@ import { PhotographyLight } from './PhotographyLight';
 import { LocalClock } from './LocalClock';
 import { Dialog } from './Dialog';
 
-export type MobileTool = 'tour' | 'share' | 'calendar' | 'compare' | 'sky' | 'analytics' | 'inspector';
+export type MobileTool = 'navigation' | 'tour' | 'share' | 'calendar' | 'compare' | 'sky' | 'analytics' | 'inspector';
 type Sheet = 'cities' | 'city' | 'time' | 'layers' | 'tools' | 'moon';
 
 const LAYER_OPTIONS = [
@@ -21,10 +21,10 @@ const LAYER_OPTIONS = [
   ['showSunRays', 'Sun rays'], ['showGraticule', 'Latitude / longitude grid'], ['autoRotate', 'Auto-rotate globe'],
 ] as const;
 
-export function MobileControls({ reducedMotion, currentDate, cities, selectedCity, layers, viewMode, isPlaying,
+export function MobileControls({ cityLocked, onToggleCityLock, reducedMotion, currentDate, cities, selectedCity, layers, viewMode, isPlaying,
   playbackSpeed, onSelectCity, onUpdateDate, onUpdateLayers, onChangeViewMode, onTogglePlay,
   onChangeSpeed, onResetToNow, onCameraPreset, onOpenTool }: {
-  reducedMotion: boolean; currentDate: Date; cities: CityData[]; selectedCity: CityData | null;
+  cityLocked: boolean; onToggleCityLock: () => void; reducedMotion: boolean; currentDate: Date; cities: CityData[]; selectedCity: CityData | null;
   layers: GlobeLayerSettings; viewMode: ViewMode; isPlaying: boolean; playbackSpeed: number;
   onSelectCity: (city: CityData | null) => void; onUpdateDate: (date: Date) => void;
   onUpdateLayers: (layers: Partial<GlobeLayerSettings>) => void;
@@ -84,7 +84,7 @@ export function MobileControls({ reducedMotion, currentDate, cities, selectedCit
           aria-label={`City details for ${selectedCity.name}`} aria-expanded={sheet === 'city'}
           className="w-full min-h-11 px-4 flex items-center justify-between gap-3 border-b border-slate-800 text-xs cursor-pointer">
           <span className="truncate font-semibold text-sky-300">{selectedCity.name}</span>
-          <span className="shrink-0 text-slate-400">{solar.elevation.toFixed(1)}° · Details ↑</span>
+          <span className="shrink-0 text-slate-400">{cityLocked ? 'Locked · ' : ''}{solar.elevation.toFixed(1)}° · Details ↑</span>
         </button>}
         <div className="grid grid-cols-5 gap-1 px-1">
           {[
@@ -121,6 +121,7 @@ export function MobileControls({ reducedMotion, currentDate, cities, selectedCit
             <div><dt className="text-slate-400">Sunrise</dt><dd>{clock(times.sunrise)}</dd></div>
             <div><dt className="text-slate-400">Sunset</dt><dd>{clock(times.sunset)}</dd></div>
           </dl>
+          <button onClick={onToggleCityLock} aria-pressed={cityLocked} className={button}>{cityLocked ? 'Unlock city' : 'Lock city'}</button>
           <PhotographyLight city={selectedCity} currentDate={currentDate} />
           <div className="grid grid-cols-2 gap-2">
             <button className={button} onClick={() => focus('focus-trajectory')}>3D Sky Dome</button>
@@ -166,7 +167,7 @@ export function MobileControls({ reducedMotion, currentDate, cities, selectedCit
 
         {sheet === 'tools' && <div className="space-y-5">
           <div className="grid grid-cols-2 gap-2">{([
-            ['tour', 'Helix globe tour'], ['share', 'Share view'], ['calendar', 'Annual daylight'], ['compare', 'Compare cities'],
+            ['navigation', 'Navigation & motion'], ['tour', 'Helix globe tour'], ['share', 'Share view'], ['calendar', 'Annual daylight'], ['compare', 'Compare cities'],
             ['sky', 'Ground-level sky'], ['analytics', 'Solar analytics'], ['inspector', 'Trajectory chart'],
           ] as const).map(([tool, label]) => <button key={tool} className={button}
             disabled={!selectedCity && ['calendar', 'sky', 'inspector'].includes(tool)} onClick={() => openTool(tool)}>{label}</button>)}

@@ -14,7 +14,9 @@ Explore sunlight around the world with an interactive 3D globe, a 2D daylight ma
 - **Local solar charts:** compare altitude curves, daily peaks, daylight duration, twilight times, and annual noon altitude range.
 - **UTC and local clocks:** the header and city comparison show the simulation instant in your device’s time zone beneath UTC, with matching typography and the UTC offset. Each comparison card also shows that city’s clock and date.
 - **Helix globe tour:** an optional scroll/swipe camera tour with vortex transitions and five latitude stops; normal atlas gestures stay unchanged.
+- **Navigation deck:** time-step shortcuts, city locking, magnetic reticle snapping, Fibonacci city clusters, and optional ambient terminator drift. Open **Navigation** on desktop or **Tools → Navigation & motion** on mobile.
 - **Time simulation:** scrub the UTC timeline, change dates, adjust playback speed, or return to the present.
+- **Coordinate deep links:** open a location and its trajectory inspector with `?lat=...&lng=...&date=...`; a second coordinate link is available in **Share view**.
 - **Shareable views:** copy a snapshot link with the location, UTC date/time, map mode, and layer settings. Shared views open paused, including custom observation points.
 - **Annual daylight calendar:** inspect every day of a year, compare longest/shortest daylight duration, see polar day/night counts, and click a date to jump to it.
 - **Compare cities:** compare two or three locations' clocks, solar altitude, sunrise/sunset, daylight duration, and 24-hour curves.
@@ -51,16 +53,20 @@ The current app runs in the browser and does not require API keys. Worldwide sea
 - On desktop, the bottom dock reserves space beside the right-hand location panel. Its tabs wrap and its contents scroll in short windows; collapsing the dock hides its body while keeping every navigation tab reachable. The location panel scrolls independently. Use **Share view**, **Annual daylight**, **Compare cities**, and **Ground-level sky** in the toolbar below the header. On mobile, open **Tools** in the bottom navigation; the globe stays clear until a tool is opened. Select a location before opening its calendar or sky view. Mobile **Cities**, **Time**, and **Layers** open one bottom sheet at a time. Tap the selected city above the navigation for its details, then close the sheet to return to the globe.
 - Calendar dates and comparison curves use UTC. **Local** beneath UTC always means the viewer’s device time zone and follows the simulation instant. City clocks use each location's time zone. Calendar years span 1900–2100.
 - In the ground-level sky, drag or use arrow keys to look around. **Face the Sun** recenters the view; hour/day buttons change the simulation time. Its seasonal overlay is independent of the globe and inspector overlays.
-- Shared links contain selected coordinates in the URL fragment. Share them with people you want to see that location. Camera orientation and open dialogs are not included.
+- Full snapshot links contain selected coordinates in the URL fragment. Share them with people you want to see that location. Camera orientation and open dialogs are not included.
 
 | Shortcut | Action |
 | --- | --- |
 | Space | Play or pause the simulation |
+| ← / → | Step UTC time by −/+15 minutes and pause playback |
+| [ / ] | Step −/+1 calendar month; clamp to the last valid day |
+| L | Lock/unlock the current city |
+| / | Open worldwide city search with the input focused |
 | M | Switch between the globe and 2D map |
 | R | Reset to the current time |
 | A | Toggle global analytics |
 
-Shortcuts are ignored while typing in an input or text area.
+Shortcuts are ignored in text inputs, selects, editable content, dialogs, and the globe tour. Modifier-key combinations are left to the browser; Space on a focused native button activates that button. Time steps stay within 1900–2100. Month stepping preserves the UTC clock and clamps month ends (January 31 → February 28/29).
 
 ## Scripts
 
@@ -174,12 +180,31 @@ The date is the selected location’s local date, with time-zone and daylight-sa
 
 The implementation scans solar altitude every five minutes and refines detected threshold crossings by bisection. Tests check normal northern/southern windows, threshold altitudes, polar continuous/absent light, DST, and date-line zones. Very brief tangent windows near polar transitions can fall between samples. These photography windows have no independent event-time accuracy guarantee; clouds, terrain, atmospheric refraction, and local obstructions affect observed light.
 
+## Navigation, city clusters, and deep links
+
+Open **Navigation** on desktop or **Tools → Navigation & motion** on mobile to see the shortcuts and enable/disable each globe behavior. Spiral unfolding, magnetic snapping, and idle drift are enabled by default for this session. They are not added to the city catalog or stored in browser storage.
+
+- **City lock:** press **L**, use **Lock city** on desktop, or the lock control in mobile city details/navigation settings. The active city stays selected when clicking the globe, another city, or a search result. Unlock before selecting a different place. Lock also stops automatic rotation, snapping, and idle drift. Explicit camera presets and time controls remain usable; the 45-city list stays unchanged.
+- **Fibonacci city clusters:** when the visible globe is large enough (projected radius at least 140 pixels), visible city dots closer than 22 pixels are grouped and unfolded into a stable screen-space Fibonacci spiral. Subtle leader lines point to their true locations. The displaced dots retain their original city identities when picked, and hidden far-side cities cannot be picked through Earth. Only marker placement changes; city coordinates, shadows, and solar calculations do not. Placement eases under normal motion preferences and is immediate with reduced motion. Layout is recalculated when the camera or viewport changes.
+- **Magnetic reticle:** after an orbit drag ends, the reticle can align to the nearest 30° meridian within 2° angular separation, or a nearby built-in/active searched city within 3° whose geometric Sun altitude is within 1° of 0°, −6°, −12°, or −18°. Snap waits for the drag to end and eases for about 0.9 seconds. It changes the camera framing, not the selected city or simulation time. New input cancels it; there is no attraction outside those small ranges.
+- **Ambient idle drift:** after 30 seconds without pointer, wheel, touch, or keyboard input, the camera gently approaches the terminator and drifts around the Sun axis at one revolution per real 24 hours. This moves only the camera: paused simulation time stays frozen, while normal live-clock behavior is unchanged. Input immediately cancels the drift. It is suspended while locked, playing simulation time, using explicit auto-rotation, on the tour, in hidden/offscreen views, or behind dialogs. Reduced motion disables drift and snapping.
+
+Readable coordinate links use this form:
+
+```text
+https://mytest.ccwu.cc/?lat=51.5074&lng=-0.1278&date=2026-06-21T12%3A00%3A00Z
+```
+
+`lat`, `lng`, and `date` are required. Dates are UTC calendar dates or ISO timestamps with an explicit zone (prefer `Z`). Coordinates must be within ±90°/±180° and dates within 1900–2100. The optional `name`, `country`, and `timezone` parameters preserve a searched city's label and local clocks; absent a zone, a matching built-in city's zone is used, otherwise UTC. `inspector=0` opens the selected globe without the trajectory inspector; the default opens the inspector. Invalid parameters are ignored. Coordinate links open paused, focus the location, and use default layer settings. They do not add cities to the catalog.
+
+**Share view** offers both a full snapshot link and **Coordinate link (opens inspector)**. Full snapshot links preserve layer settings and 2D/3D mode as before, and take precedence over coordinate parameters if both are present. Neither link format stores the exact camera orbit orientation. Query links restore the daylight shadow at the specified instant and the selected location's inspector; browser back/forward navigation restores linked views through `popstate`, and existing fragment links continue to work.
+
 ## Rendering and motion
 
 - Globe and ground-sky canvas pixel ratios are capped at **2**; automated headless WebGL checks use 1.
 - The globe render loop stops when the document is hidden, its viewport is offscreen/hidden, or a planner/inspector dialog covers it. It resumes with a fresh frame clock and cleans up observers/listeners on unmount. Switching to the 2D map unmounts the globe renderer.
 - Playback schedules no animation loop when paused. Hidden tabs suspend playback and resume without catching up hidden elapsed time; live-clock updates also skip hidden tabs.
-- The system’s **prefers-reduced-motion** setting disables globe auto-rotation, orbital damping, cloud drift, and tour spins/vortex effects. Automatic rotation is unavailable in the mobile layer controls while this preference is active. Explicitly starting playback advances simulation time once per second instead of continuously animating it. Changing the motion preference pauses playback.
+- The system’s **prefers-reduced-motion** setting disables globe auto-rotation, orbital damping, cloud drift, magnetic snapping, ambient idle drift, and tour spins/vortex effects. City-cluster placement is immediate under this preference. Automatic rotation is unavailable in the mobile layer controls while this preference is active. Explicitly starting playback advances simulation time once per second instead of continuously animating it. Changing the motion preference pauses playback.
 
 ### Scroll-driven globe tour
 

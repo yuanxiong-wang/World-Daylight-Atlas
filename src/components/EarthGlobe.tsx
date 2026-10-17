@@ -1,10 +1,12 @@
-import React, { useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SubsolarPoint, CityData, GlobeLayerSettings } from '../types';
 import { createEarthTextures, createStarfield } from '../utils/earthTextures';
 import { getSolarPosition, getSolarMilestones, getAnnualSolarAltitudeRange, splitSolarPath } from '../utils/solarCalculator';
 
+import { canIdleDrift, DEFAULT_INTERACTIONS, findMagneticSnap, unfoldCities } from '../utils/globeInteraction';
+import type { GlobeInteractionOptions } from '../utils/globeInteraction';
 import { createVisibleFrameLoop } from '../utils/visibleFrameLoop';
 import { PhotographyLight } from './PhotographyLight';
 import { sampleTour } from '../utils/globeTour';
@@ -15,6 +17,9 @@ interface SolarPickPayload {
 }
 
 interface EarthGlobeProps {
+  interactionOptions?: GlobeInteractionOptions;
+  cityLocked?: boolean;
+  playing?: boolean;
   renderActive?: boolean;
   reducedMotion?: boolean;
   tour?: { progress: number; stops: CityData[]; reducedMotion: boolean } | null;
@@ -240,6 +245,9 @@ function createLabelSprite(
 }
 
 export const EarthGlobe: React.FC<EarthGlobeProps> = ({
+  interactionOptions = DEFAULT_INTERACTIONS,
+  cityLocked = false,
+  playing = false,
   renderActive = true,
   reducedMotion = false,
   tour = null,
@@ -256,6 +264,9 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
   onResetCameraPreset,
   onTriggerCameraPreset,
 }) => {
+  const [snapLabel, setSnapLabel] = useState('');
+  const behaviorRef = useRef({ options: interactionOptions, locked: cityLocked, playing, currentDate, selectedCity, subsolarPoint, autoRotate: layers.autoRotate });
+  behaviorRef.current = { options: interactionOptions, locked: cityLocked, playing, currentDate, selectedCity, subsolarPoint, autoRotate: layers.autoRotate };
   const renderActiveRef = useRef(renderActive);
   renderActiveRef.current = renderActive;
   const reducedMotionRef = useRef(reducedMotion);
@@ -505,6 +516,106 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     graticuleGroupRef.current = graticuleGroup;
     scene.add(graticuleGroup);
 
+    // Camera behavior never owns the simulation clock or selects a city.
+    let lastActivity = performance.now(), dragging = false;
+    let dragDirection = new THREE.Vector3();
+    let snapTimer: ReturnType<typeof setTimeout> | null = null;
+    let snap: { started: number; position: THREE.Vector3; target: THREE.Vector3; rotation: THREE.Quaternion } | null = null;
+    const identity = new THREE.Quaternion();
+    const activity = () => {
+      lastActivity = performance.now();
+      if (snapTimer !== null) clearTimeout(snapTimer);
+      snapTimer = null; snap = null;
+      setSnapLabel('');
+      controls.enabled = !tourRef.current;
+      controls.enableDamping = !reducedMotionRef.current;
+      container.dataset.motion = 'manual';
+    };
+    const beginSnap = () => {
+      snapTimer = null;
+      const state = behaviorRef.current;
+      if (!state.options.snapping || state.locked || reducedMotionRef.current || tourRef.current || dragging || document.hidden || !renderActiveRef.current || !container.getClientRects().length) return;
+      // Flush residual orbit damping before taking the starting camera snapshot.
+      controls.enableDamping = false; controls.update(); camera.updateMatrixWorld();
+      const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(), camera);
+      const hit = earthMeshRef.current ? ray.intersectObject(earthMeshRef.current)[0] : null;
+      if (!hit) { controls.enableDamping = true; return; }
+      const direction = hit.point.clone().normalize();
+      const point = { lat: Math.asin(direction.y) * 180 / Math.PI, lng: Math.atan2(-direction.z, direction.x) * 180 / Math.PI };
+      const candidates = state.selectedCity && !cities.some(city => city.id === state.selectedCity!.id) ? [...cities, state.selectedCity] : cities;
+      const target = findMagneticSnap(point, candidates, state.currentDate);
+      if (!target || target.distance < 0.02) { controls.enableDamping = true; return; }
+      snap = { started: performance.now(), position: camera.position.clone(), target: controls.target.clone(),
+        rotation: new THREE.Quaternion().setFromUnitVectors(direction, latLngToVector3(target.lat, target.lng, 1).normalize()) };
+      setSnapLabel(target.label);
+    };
+    const startDrag = () => { activity(); dragging = true; dragDirection.copy(camera.position).sub(controls.target).normalize(); };
+    const endDrag = () => {
+      dragging = false;
+      const direction = camera.position.clone().sub(controls.target).normalize();
+      if (dragDirection.angleTo(direction) > 0.002) snapTimer = setTimeout(beginSnap, 220);
+    };
+    controls.addEventListener('start', startDrag); controls.addEventListener('end', endDrag);
+    const activityEvents = ['pointerdown', 'pointermove', 'wheel', 'keydown', 'touchstart'] as const;
+    activityEvents.forEach(event => window.addEventListener(event, activity, { capture: true, passive: true }));
+    document.addEventListener('visibilitychange', activity);
+
+    let spiralSignature = '';
+    const spiralTargets = new Map<string, { position: THREE.Vector3; expanded: boolean }>();
+    const updateSpiral = (delta: number) => {
+      const group = citiesGroupRef.current;
+      if (!group) return;
+      camera.updateMatrixWorld();
+      const width = container.clientWidth, height = container.clientHeight;
+      const largeEnough = EARTH_RADIUS * height / (2 * Math.tan(camera.fov * Math.PI / 360) * camera.position.length()) >= 140;
+      const enabled = behaviorRef.current.options.spiral && group.visible && !tourRef.current && largeEnough;
+      const signature = `${camera.matrixWorld.elements.join(',')}|${camera.projectionMatrix.elements.join(',')}|${width}|${height}|${enabled}|${group.children[0]?.uuid}`;
+      if (signature !== spiralSignature) {
+        spiralSignature = signature; spiralTargets.clear();
+        const projected: { id: string; x: number; y: number }[] = [];
+        if (enabled) for (const object of group.children) {
+          const base = object.userData.basePosition as THREE.Vector3;
+          if (!base || base.clone().normalize().dot(camera.position) <= EARTH_RADIUS) continue;
+          const point = base.clone().project(camera);
+          if (Math.abs(point.x) > 1 || Math.abs(point.y) > 1 || Math.abs(point.z) > 1) continue;
+          projected.push({ id: object.userData.city.id, x: (point.x + 1) * width / 2, y: (1 - point.y) * height / 2 });
+        }
+        const positions = unfoldCities(projected, width, height);
+        for (const object of group.children) {
+          const base = object.userData.basePosition as THREE.Vector3;
+          if (!base) continue;
+          const point = positions.get(object.userData.city.id);
+          let position = base.clone();
+          if (point?.expanded) {
+            const ndc = new THREE.Vector2(point.x / width * 2 - 1, 1 - point.y / height * 2);
+            const ray = new THREE.Raycaster(); ray.setFromCamera(ndc, camera);
+            position = ray.ray.intersectSphere(new THREE.Sphere(new THREE.Vector3(), EARTH_RADIUS + 1.2), new THREE.Vector3())
+              ?? new THREE.Vector3(ndc.x, ndc.y, base.clone().project(camera).z).unproject(camera);
+          }
+          spiralTargets.set(object.uuid, { position, expanded: !!point?.expanded });
+        }
+      }
+      let expanded = 0, settled = true;
+      for (const object of group.children) {
+        const base = object.userData.basePosition as THREE.Vector3;
+        const leader = object.userData.leader as THREE.Line;
+        const target = spiralTargets.get(object.uuid);
+        if (!base || !leader || !target) continue;
+        if (reducedMotionRef.current) object.position.copy(target.position);
+        else object.position.lerp(target.position, 1 - Math.exp(-delta * 14));
+        if (object.position.distanceToSquared(target.position) > 0.00001) settled = false;
+        if (target.expanded) expanded++;
+        leader.visible = object.position.distanceToSquared(base) > 0.0001;
+        if (leader.visible) {
+          const anchor = base.clone().sub(object.position);
+          const attribute = leader.geometry.getAttribute('position') as THREE.BufferAttribute;
+          attribute.setXYZ(0, anchor.x, anchor.y, anchor.z); attribute.setXYZ(1, 0, 0, 0); attribute.needsUpdate = true;
+        }
+      }
+      container.dataset.unfoldedCities = String(expanded);
+      container.dataset.spiralSettled = String(settled);
+    };
+
     // Resize handler
     const handleResize = () => {
       if (!container || !rendererRef.current || !cameraRef.current) return;
@@ -531,7 +642,13 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       }
 
       const tourState = tourRef.current;
-      controls.enabled = !tourState;
+      const behavior = behaviorRef.current;
+      if (snap && (!behavior.options.snapping || behavior.locked || reducedMotionRef.current || tourState)) { snap = null; setSnapLabel(''); }
+      const idle = !behavior.autoRotate && canIdleDrift(performance.now(), lastActivity, { enabled: behavior.options.idleDrift,
+        reducedMotion: reducedMotionRef.current, locked: behavior.locked, playing: behavior.playing, tour: !!tourState, dragging });
+      controls.enabled = !tourState && !snap;
+      controls.autoRotate = behavior.autoRotate && !behavior.locked && !reducedMotionRef.current && !tourState && !snap && !idle;
+      container.dataset.motion = tourState ? 'tour' : snap ? 'snapping' : idle ? 'idle-drift' : 'manual';
       if (tourState) {
         const point = sampleTour(tourState.progress, tourState.stops, tourState.reducedMotion);
         const halfFov = Math.min(camera.fov * Math.PI / 360, Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect));
@@ -539,7 +656,29 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
         camera.position.copy(latLngToVector3(point.lat, point.lng, radius));
         controls.target.set(0, 0, 0);
         camera.lookAt(0, 0, 0);
-      } else controls.update();
+      } else if (snap) {
+        const fraction = Math.min(1, (performance.now() - snap.started) / 900), smooth = fraction * fraction * (3 - 2 * fraction);
+        const rotation = identity.clone().slerp(snap.rotation, smooth);
+        camera.position.copy(snap.position).applyQuaternion(rotation);
+        controls.target.copy(snap.target).applyQuaternion(rotation);
+        controls.update(delta);
+        if (fraction === 1) { snap = null; controls.enabled = true; controls.enableDamping = !reducedMotionRef.current; }
+      } else {
+        controls.update(delta);
+        if (idle) {
+          const sun = latLngToVector3(behavior.subsolarPoint.lat, behavior.subsolarPoint.lng, 1).normalize();
+          const direction = camera.position.clone().normalize();
+          let terminator = direction.clone().addScaledVector(sun, -direction.dot(sun));
+          if (terminator.lengthSq() < 0.001) terminator = new THREE.Vector3(0, 1, 0).cross(sun);
+          terminator.normalize();
+          const amount = 1 - Math.exp(-delta * 0.12);
+          camera.position.lerp(terminator.multiplyScalar(camera.position.length()), amount);
+          camera.position.applyAxisAngle(sun, delta * 2 * Math.PI / 86400);
+          controls.target.lerp(new THREE.Vector3(), amount);
+          camera.lookAt(controls.target);
+        }
+      }
+      updateSpiral(delta);
       renderer.render(scene, camera);
     };
 
@@ -547,6 +686,10 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     frameLoopRef.current = frameLoop;
 
     return () => {
+      if (snapTimer !== null) clearTimeout(snapTimer);
+      controls.removeEventListener('start', startDrag); controls.removeEventListener('end', endDrag);
+      activityEvents.forEach(event => window.removeEventListener(event, activity, true));
+      document.removeEventListener('visibilitychange', activity);
       frameLoop.dispose();
       frameLoopRef.current = null;
       window.removeEventListener('resize', handleResize);
@@ -1030,7 +1173,13 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
 
       const cityObj = new THREE.Group();
       cityObj.position.copy(pos);
-      cityObj.userData = { city };
+      cityObj.userData = { city, basePosition: pos.clone() };
+      const leaderGeometry = new THREE.BufferGeometry();
+      leaderGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      const leader = new THREE.Line(leaderGeometry, new THREE.LineBasicMaterial({ color: 0x67b7d1, transparent: true, opacity: 0.35 }));
+      leader.visible = false; leader.frustumCulled = false; leader.raycast = () => {};
+      cityObj.userData.leader = leader;
+      cityObj.add(leader);
 
       const pinColor = isSelected ? 0xef4444 : 0x38bdf8;
       const dotGeo = new THREE.SphereGeometry(isSelected ? 0.9 : 0.5, 12, 12);
@@ -1073,7 +1222,9 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       }
 
       // Check city markers
-      const cityIntersects = raycaster.intersectObjects(citiesGroupRef.current.children, true);
+      const earthHit = earthMeshRef.current ? raycaster.intersectObject(earthMeshRef.current)[0] : null;
+      const cityIntersects = citiesGroupRef.current.visible ? raycaster.intersectObjects(citiesGroupRef.current.children, true)
+        .filter(hit => !earthHit || hit.distance <= earthHit.distance + 0.8) : [];
       if (cityIntersects.length > 0) {
         let parent: THREE.Object3D | null = cityIntersects[0].object;
         while (parent && !parent.userData.city && parent !== citiesGroupRef.current) {
@@ -1211,6 +1362,11 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
         className="w-full h-full cursor-grab active:cursor-grabbing"
       />
 
+      {!tour && interactionOptions.snapping && <div data-testid="globe-reticle" aria-hidden="true" className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="relative h-5 w-5 rounded-full border border-sky-200/30 text-sky-200/50 flex items-center justify-center text-xs">+
+          {snapLabel && <span className="absolute top-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-slate-950/80 px-2 py-1 text-[10px] text-sky-200">{snapLabel}</span>}
+        </div>
+      </div>}
       {/* Selected Location / City Floating Panel with Interactive 3D Sun Path & Seasonal Controls */}
       {selectedCity && citySolar && (
         <div data-testid="desktop-city-panel" style={tour ? { display: 'none' } : undefined} className="hidden lg:block absolute top-20 right-6 z-20 pointer-events-auto bg-slate-900/92 backdrop-blur-md border border-slate-700/80 rounded-2xl p-4 shadow-2xl text-white w-80 max-w-[calc(100vw-3rem)] max-h-[calc(100dvh-6.5rem)] overflow-y-auto overscroll-contain">
