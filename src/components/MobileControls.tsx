@@ -10,7 +10,7 @@ import { PhotographyLight } from './PhotographyLight';
 import { LocalClock } from './LocalClock';
 import { Dialog } from './Dialog';
 
-export type MobileTool = 'navigation' | 'tour' | 'share' | 'calendar' | 'compare' | 'sky' | 'analytics' | 'inspector';
+export type MobileTool = 'tour' | 'share' | 'calendar' | 'compare' | 'sky' | 'analytics' | 'inspector';
 type Sheet = 'cities' | 'city' | 'time' | 'layers' | 'tools' | 'moon';
 
 const LAYER_OPTIONS = [
@@ -167,7 +167,7 @@ export function MobileControls({ cityLocked, onToggleCityLock, reducedMotion, cu
 
         {sheet === 'tools' && <div className="space-y-5">
           <div className="grid grid-cols-2 gap-2">{([
-            ['navigation', 'Navigation & motion'], ['tour', 'Helix globe tour'], ['share', 'Share view'], ['calendar', 'Annual daylight'], ['compare', 'Compare cities'],
+            ['tour', 'Helix globe tour'], ['share', 'Share view'], ['calendar', 'Annual daylight'], ['compare', 'Compare cities'],
             ['sky', 'Ground-level sky'], ['analytics', 'Solar analytics'], ['inspector', 'Trajectory chart'],
           ] as const).map(([tool, label]) => <button key={tool} className={button}
             disabled={!selectedCity && ['calendar', 'sky', 'inspector'].includes(tool)} onClick={() => openTool(tool)}>{label}</button>)}

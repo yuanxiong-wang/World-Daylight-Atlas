@@ -56,6 +56,7 @@ for (const viewport of [
     await sheet.getByRole('button', { name: 'Close dialog' }).click();
 
     await page.getByRole('button', { name: 'Tools', exact: true }).click();
+    await expect(page.getByRole('dialog').getByRole('button', { name: 'Navigation & motion', exact: true })).toHaveCount(0);
     await page.getByRole('dialog').getByRole('button', { name: 'Compare cities', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(1);
     await expect(page.getByRole('dialog').getByRole('heading', { name: 'Compare cities', exact: true })).toBeVisible();

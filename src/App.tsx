@@ -203,7 +203,6 @@ export default function App() {
 
   const openTool = (tool: MobileTool) => {
     setIsPlaying(false);
-    if (tool === 'navigation') setIsNavigationOpen(true);
     if (tool === 'tour') startTour();
     if (tool === 'share') setShareUrl(createShareUrl(window.location.href, { date: currentDate, city: selectedCity, view: viewMode, layers }));
     if (tool === 'calendar' && selectedCity) setIsCalendarOpen(true);
