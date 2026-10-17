@@ -13,11 +13,20 @@ import { CompareCities } from './components/CompareCities';
 import { GroundSkyView } from './components/GroundSkyView';
 import { GlobeTour } from './components/GlobeTour';
 import { TOUR_CITY_IDS } from './utils/globeTour';
+import { NavigationDeck } from './components/NavigationDeck';
+import { CitySearch } from './components/CitySearch';
+import { Dialog } from './components/Dialog';
+import { clampSimulationDate, stepUtcMonth, DEFAULT_INTERACTIONS } from './utils/globeInteraction';
 import { MobileControls } from './components/MobileControls';
 import type { MobileTool } from './components/MobileControls';
-import { createShareUrl, DEFAULT_LAYERS, readSharedView } from './utils/viewState';
+import { createShareUrl, DEFAULT_LAYERS, readLocationView } from './utils/viewState';
 
 export default function App() {
+  const [interactionOptions, setInteractionOptions] = useState({ ...DEFAULT_INTERACTIONS });
+  const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isCityLocked, setIsCityLocked] = useState(false);
+  const [navigationMessage, setNavigationMessage] = useState('');
   const [tourProgress, setTourProgress] = useState<number | null>(null);
   const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const tourStops = useMemo(() => TOUR_CITY_IDS.map(id => WORLD_CITIES.find(city => city.id === id)!), []);
@@ -42,7 +51,7 @@ export default function App() {
         ? '[data-testid="desktop-tour-launch"]' : '[data-testid="mobile-navigation"] button:last-child') as HTMLElement)?.focus();
     });
   };
-  const [initialView] = useState(() => readSharedView(window.location.hash));
+  const [initialView] = useState(() => readLocationView(window.location.href, WORLD_CITIES));
   const [currentDate, setCurrentDate] = useState<Date>(() => initialView?.date ?? new Date());
   const [followLive, setFollowLive] = useState(!initialView);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -54,9 +63,9 @@ export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>(initialView?.view ?? '3d-globe');
   // Default to London (or first city) so the 3D sun trajectory sky dome is immediately visible!
   const [selectedCity, setSelectedCity] = useState<CityData | null>(() => initialView ? initialView.city : WORLD_CITIES.find(city => city.id === 'london')!);
-  const [isCityModalOpen, setIsCityModalOpen] = useState<boolean>(false);
+  const [isCityModalOpen, setIsCityModalOpen] = useState<boolean>(() => !!initialView?.inspector);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState<boolean>(false);
-  const [activeCameraPreset, setActiveCameraPreset] = useState<string | null>(() => window.matchMedia('(max-width: 1023px)').matches ? 'focus-city' : 'focus-trajectory');
+  const [activeCameraPreset, setActiveCameraPreset] = useState<string | null>(() => initialView?.city || window.matchMedia('(max-width: 1023px)').matches ? 'focus-city' : 'focus-trajectory');
 
   // Globe Layers configuration
   const [layers, setLayers] = useState<GlobeLayerSettings>(() => initialView?.layers ?? { ...DEFAULT_LAYERS });
@@ -68,9 +77,11 @@ export default function App() {
   // Follow shared links even when navigation only changes the URL fragment.
   useEffect(() => {
     const restore = () => {
-      const state = readSharedView(window.location.hash);
+      const state = readLocationView(window.location.href, WORLD_CITIES);
       if (!state) return;
       setTourProgress(null);
+      setIsCityLocked(false); setIsSearchOpen(false); setIsNavigationOpen(false);
+      setIsCityModalOpen(!!state.inspector);
       setCurrentDate(state.date);
       setSelectedCity(state.city);
       setViewMode(state.view);
@@ -83,8 +94,8 @@ export default function App() {
       setIsGroundSkyOpen(false);
       setShareUrl(null);
     };
-    window.addEventListener('hashchange', restore);
-    return () => window.removeEventListener('hashchange', restore);
+    window.addEventListener('hashchange', restore); window.addEventListener('popstate', restore);
+    return () => { window.removeEventListener('hashchange', restore); window.removeEventListener('popstate', restore); };
   }, []);
 
   // Compute Subsolar Point in real-time
@@ -138,9 +149,15 @@ export default function App() {
 
   // Select city handler
   const handleSelectCity = useCallback((city: CityData | null) => {
+    if (isCityLocked) { setNavigationMessage(`${selectedCity?.name ?? 'City'} is locked. Unlock to select another place.`); return; }
     setSelectedCity(city);
+    setNavigationMessage('');
     setActiveCameraPreset(city ? 'focus-city' : null);
-  }, []);
+  }, [isCityLocked, selectedCity]);
+  const toggleCityLock = () => {
+    if (!selectedCity) return;
+    setIsCityLocked(locked => !locked); setNavigationMessage('');
+  };
 
   // Reset to current time
   const handleResetToNow = useCallback(() => {
@@ -149,33 +166,44 @@ export default function App() {
     setFollowLive(true);
   }, []);
 
-  // Keyboard navigation shortcuts
+  const modalOpen = isCalendarOpen || isComparisonOpen || isGroundSkyOpen || !!shareUrl || isCityModalOpen || isAnalyticsOpen || isNavigationOpen || isSearchOpen;
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (tourProgress !== null) return;
-      // Keep native keyboard controls working inside dialogs.
-      if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return;
-      // Ignore if user is typing in search input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    if (!isSearchOpen) return;
+    const frame = requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[data-testid="city-search"] input')?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [isSearchOpen]);
+  const openSearch = () => { setIsPlaying(false); setIsSearchOpen(true); setIsNavigationOpen(false); };
 
-      if (e.code === 'Space') {
-        e.preventDefault();
-        setIsPlaying((prev) => !prev);
-      } else if (e.key === 'm' || e.key === 'M') {
-        setViewMode((prev) => (prev === '3d-globe' ? '2d-map' : '3d-globe'));
-      } else if (e.key === 'r' || e.key === 'R') {
-        handleResetToNow();
-      } else if (e.key === 'a' || e.key === 'A') {
-        setIsAnalyticsOpen((prev) => !prev);
+  // Shortcuts preserve input, native-control, modifier, tour and dialog behavior.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (tourProgress !== null || modalOpen || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"],[role="dialog"]')) return;
+      if ((event.code === 'Space' || event.key === ' ') && !target?.closest('button,a[href]')) {
+        event.preventDefault(); if (!event.repeat) setIsPlaying(previous => !previous); return;
       }
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault(); setIsPlaying(false); setFollowLive(false);
+        setCurrentDate(date => clampSimulationDate(new Date(+date + (event.key === 'ArrowLeft' ? -1 : 1) * 15 * 60000)));
+      } else if (event.key === '[' || event.key === ']') {
+        event.preventDefault(); setIsPlaying(false); setFollowLive(false);
+        setCurrentDate(date => stepUtcMonth(date, event.key === '[' ? -1 : 1));
+      } else if (event.key.toLowerCase() === 'l' && selectedCity && !event.repeat) {
+        event.preventDefault(); setIsCityLocked(previous => !previous); setNavigationMessage('');
+      } else if (event.key === '/' && !event.repeat) {
+        event.preventDefault(); setIsPlaying(false); setIsSearchOpen(true);
+      } else if (event.key.toLowerCase() === 'm') setViewMode(previous => previous === '3d-globe' ? '2d-map' : '3d-globe');
+      else if (event.key.toLowerCase() === 'r') handleResetToNow();
+      else if (event.key.toLowerCase() === 'a') setIsAnalyticsOpen(previous => !previous);
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleResetToNow, tourProgress]);
+  }, [modalOpen, tourProgress, selectedCity, handleResetToNow]);
 
   const openTool = (tool: MobileTool) => {
     setIsPlaying(false);
+    if (tool === 'navigation') setIsNavigationOpen(true);
     if (tool === 'tour') startTour();
     if (tool === 'share') setShareUrl(createShareUrl(window.location.href, { date: currentDate, city: selectedCity, view: viewMode, layers }));
     if (tool === 'calendar' && selectedCity) setIsCalendarOpen(true);
@@ -190,7 +218,8 @@ export default function App() {
       {/* 3D Globe or 2D Map View */}
       {viewMode === '3d-globe' ? (
         <EarthGlobe
-          renderActive={!isCalendarOpen && !isComparisonOpen && !isGroundSkyOpen && !shareUrl && !isCityModalOpen && !isAnalyticsOpen}
+          renderActive={!modalOpen}
+          interactionOptions={interactionOptions} cityLocked={isCityLocked} playing={isPlaying}
           reducedMotion={reducedMotion}
           tour={tourProgress === null ? null : { progress: tourProgress, stops: tourStops, reducedMotion }}
           currentDate={currentDate}
@@ -219,7 +248,10 @@ export default function App() {
       {tourProgress !== null && <GlobeTour stops={tourStops} progress={tourProgress} reducedMotion={reducedMotion}
         currentDate={currentDate} onProgress={setTourProgress} onClose={closeTour} />}
       {tourProgress === null && <>
-      <div className="hidden lg:flex absolute top-24 left-4 z-20 flex-wrap gap-2 max-w-[calc(100vw-2rem)]">
+      <div className="hidden lg:flex absolute top-24 left-4 z-20 flex-wrap gap-2 " style={{ right: viewMode === '3d-globe' && selectedCity ? '22.5rem' : '1rem' }}>
+        <button onClick={() => setIsNavigationOpen(true)} className="shrink-0 rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-slate-200 cursor-pointer">Navigation</button>
+        <button onClick={toggleCityLock} disabled={!selectedCity} aria-pressed={isCityLocked} title="Lock / unlock city (L)"
+          className="shrink-0 rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-sky-300 disabled:opacity-40 cursor-pointer">{isCityLocked ? 'Unlock city' : 'Lock city'}</button>
         <button data-testid="desktop-tour-launch" onClick={startTour} className="shrink-0 rounded-xl border border-sky-700 bg-slate-900/90 px-3 py-2 text-xs text-sky-300 cursor-pointer">Helix globe tour</button>
         <button onClick={() => setShareUrl(createShareUrl(window.location.href, {
           date: currentDate, city: selectedCity, view: viewMode, layers,
@@ -241,6 +273,13 @@ export default function App() {
           Ground-level sky
         </button>
       </div>
+      <p role="status" className="sr-only">{navigationMessage}</p>
+      {isNavigationOpen && <NavigationDeck options={interactionOptions} onChange={setInteractionOptions} reducedMotion={reducedMotion}
+        locked={isCityLocked} cityName={selectedCity?.name} onToggleLock={toggleCityLock} onClose={() => setIsNavigationOpen(false)} />}
+      {isSearchOpen && <Dialog title="Search cities worldwide" onClose={() => setIsSearchOpen(false)}>
+        {isCityLocked && <button onClick={toggleCityLock} className="min-h-11 mb-3 text-sm text-amber-300 underline cursor-pointer">Unlock {selectedCity?.name} to select a result</button>}
+        <CitySearch cities={WORLD_CITIES} selectedId={selectedCity?.id} onSelect={city => { handleSelectCity(city); if (!isCityLocked) { setViewMode('3d-globe'); setIsSearchOpen(false); } }} />
+      </Dialog>}
       {shareUrl && <ShareViewDialog url={shareUrl} onClose={() => setShareUrl(null)} />}
       {isCalendarOpen && selectedCity && <DaylightCalendar city={selectedCity} currentDate={currentDate}
         onClose={() => setIsCalendarOpen(false)} onSelectDate={date => {
@@ -265,7 +304,7 @@ export default function App() {
           setIsPlaying(false);
         }} />}
 
-      <MobileControls currentDate={currentDate} cities={WORLD_CITIES} selectedCity={selectedCity}
+      <MobileControls cityLocked={isCityLocked} onToggleCityLock={toggleCityLock} currentDate={currentDate} cities={WORLD_CITIES} selectedCity={selectedCity}
         reducedMotion={reducedMotion} layers={layers} viewMode={viewMode} isPlaying={isPlaying} playbackSpeed={playbackSpeed}
         onSelectCity={handleSelectCity} onUpdateDate={date => {
           setCurrentDate(date); setFollowLive(false); setIsPlaying(false);
