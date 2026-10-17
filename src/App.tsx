@@ -27,6 +27,12 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCityLocked, setIsCityLocked] = useState(false);
   const [navigationMessage, setNavigationMessage] = useState('');
+  useEffect(() => {
+    const mobile = window.matchMedia('(max-width: 1023px)');
+    const closeMobileNavigation = () => { if (mobile.matches) setIsNavigationOpen(false); };
+    mobile.addEventListener('change', closeMobileNavigation);
+    return () => mobile.removeEventListener('change', closeMobileNavigation);
+  }, []);
   const [tourProgress, setTourProgress] = useState<number | null>(null);
   const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const tourStops = useMemo(() => TOUR_CITY_IDS.map(id => WORLD_CITIES.find(city => city.id === id)!), []);

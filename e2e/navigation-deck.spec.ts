@@ -68,6 +68,8 @@ test('idle drift waits thirty seconds, preserves simulation time, and respects l
   await page.getByRole('button', { name: 'Navigation', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: 'Ambient idle drift', exact: false })).toBeDisabled();
   await expect(page.getByRole('checkbox', { name: 'Magnetic reticle snapping', exact: false })).toBeDisabled();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole('dialog', { name: 'Navigation & motion', exact: true })).toHaveCount(0);
 });
 
 test('a small drag gently snaps the reticle without changing the city', async ({ page, baseURL }) => {
