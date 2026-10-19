@@ -211,3 +211,9 @@ https://mytest.ccwu.cc/?lat=51.5074&lng=-0.1278&date=2026-06-21T12%3A00%3A00Z
 Choose **Helix globe tour** from the desktop toolbar or **Tools** on mobile. Scroll or swipe to move the camera along a spiral around Earth, visiting Tromsø, London, Singapore, Sydney, and Ushuaia. Vortex rings build during travel and clear at each stop. Each stop explains its latitude’s daylight pattern and shows daylight hours and Sun altitude for the simulation date, which stays fixed during the tour.
 
 Use **Previous stop**, **Next stop**, the progress slider, arrow/Page keys, or Home/End to navigate. **Exit tour** or Escape returns to your selected city. The tour replaces the regular controls while open; scrolling elsewhere in the app is unchanged. With your system’s reduced-motion preference enabled, it uses discrete city views without orbital spins or vortex effects.
+
+## iPhone and iPad app
+
+A bundled Capacitor iOS project lives in `ios/`. It uses the compact controls on iPhone and iPad, supports native sharing, pauses rendering/playback in the background, and works offline with the 45 built-in cities. Worldwide city search still requires a connection. The GitHub Pages site remains available and is the destination for shared links.
+
+See [IOS.md](IOS.md) for building with Xcode 26+, simulator checks, and the **TestFlight first → App Store** release process. Run `npm run ios:sync` before opening the project with `npm run ios:open`. TestFlight distribution requires an active Apple Developer Program membership; automated builds are unsigned and do not upload to Apple.

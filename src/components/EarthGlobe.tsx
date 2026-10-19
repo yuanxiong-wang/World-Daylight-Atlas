@@ -1,3 +1,4 @@
+import { isCompactViewport } from '../utils/platform';
 import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -1296,10 +1297,12 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
         controls.target.copy(pObs);
       } else {
         let distance = 110;
-        if (window.matchMedia('(max-width: 1023px)').matches) {
+        if (isCompactViewport()) {
           const verticalHalfFov = camera.fov * Math.PI / 360;
           const horizontalHalfFov = Math.atan(Math.tan(verticalHalfFov) * camera.aspect);
-          const visibleFraction = Math.max(0.4, (window.innerHeight - 180) / window.innerHeight);
+          const chromeHeight = ['mobile-header', 'mobile-navigation'].reduce((height, id) =>
+            height + (document.querySelector(`[data-testid="${id}"]`)?.getBoundingClientRect().height ?? 0), 24);
+          const visibleFraction = Math.max(0.4, (window.innerHeight - Math.max(180, chromeHeight)) / window.innerHeight);
           distance = Math.max(distance,
             EARTH_RADIUS / Math.sin(horizontalHalfFov) * 1.1,
             EARTH_RADIUS / Math.sin(verticalHalfFov) * 1.1 / visibleFraction);
@@ -1369,7 +1372,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       </div>}
       {/* Selected Location / City Floating Panel with Interactive 3D Sun Path & Seasonal Controls */}
       {selectedCity && citySolar && (
-        <div data-testid="desktop-city-panel" style={tour ? { display: 'none' } : undefined} className="hidden lg:block absolute top-20 right-6 z-20 pointer-events-auto bg-slate-900/92 backdrop-blur-md border border-slate-700/80 rounded-2xl p-4 shadow-2xl text-white w-80 max-w-[calc(100vw-3rem)] max-h-[calc(100dvh-6.5rem)] overflow-y-auto overscroll-contain">
+        <div data-testid="desktop-city-panel" style={tour ? { display: 'none' } : undefined} className="desktop-chrome hidden lg:block absolute top-20 right-6 z-20 pointer-events-auto bg-slate-900/92 backdrop-blur-md border border-slate-700/80 rounded-2xl p-4 shadow-2xl text-white w-80 max-w-[calc(100vw-3rem)] max-h-[calc(100dvh-6.5rem)] overflow-y-auto overscroll-contain">
           {/* Header */}
           <div className="flex items-start justify-between gap-3 mb-2.5">
             <div>

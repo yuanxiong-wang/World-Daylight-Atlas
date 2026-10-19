@@ -1,3 +1,5 @@
+import { isAppVisible, APP_VISIBILITY_EVENT } from './utils/appVisibility';
+import { isCompactViewport, shareBaseUrl } from './utils/platform';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { ViewMode, GlobeLayerSettings, CityData } from './types';
 import { WORLD_CITIES } from './data/cities';
@@ -29,7 +31,7 @@ export default function App() {
   const [navigationMessage, setNavigationMessage] = useState('');
   useEffect(() => {
     const mobile = window.matchMedia('(max-width: 1023px)');
-    const closeMobileNavigation = () => { if (mobile.matches) setIsNavigationOpen(false); };
+    const closeMobileNavigation = () => { if (isCompactViewport()) setIsNavigationOpen(false); };
     mobile.addEventListener('change', closeMobileNavigation);
     return () => mobile.removeEventListener('change', closeMobileNavigation);
   }, []);
@@ -53,7 +55,7 @@ export default function App() {
     requestAnimationFrame(() => {
       const previous = tourReturnFocus.current;
       if (previous?.isConnected) previous.focus();
-      else (document.querySelector(window.matchMedia('(min-width: 1024px)').matches
+      else (document.querySelector(!isCompactViewport()
         ? '[data-testid="desktop-tour-launch"]' : '[data-testid="mobile-navigation"] button:last-child') as HTMLElement)?.focus();
     });
   };
@@ -71,7 +73,7 @@ export default function App() {
   const [selectedCity, setSelectedCity] = useState<CityData | null>(() => initialView ? initialView.city : WORLD_CITIES.find(city => city.id === 'london')!);
   const [isCityModalOpen, setIsCityModalOpen] = useState<boolean>(() => !!initialView?.inspector);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState<boolean>(false);
-  const [activeCameraPreset, setActiveCameraPreset] = useState<string | null>(() => initialView?.city || window.matchMedia('(max-width: 1023px)').matches ? 'focus-city' : 'focus-trajectory');
+  const [activeCameraPreset, setActiveCameraPreset] = useState<string | null>(() => initialView?.city || isCompactViewport() ? 'focus-city' : 'focus-trajectory');
 
   // Globe Layers configuration
   const [layers, setLayers] = useState<GlobeLayerSettings>(() => initialView?.layers ?? { ...DEFAULT_LAYERS });
@@ -128,22 +130,22 @@ export default function App() {
     };
     const sync = () => {
       stop();
-      if (document.hidden) return;
+      if (!isAppVisible()) return;
       previous = performance.now();
       if (reducedMotion) timer = setInterval(() => {
         setCurrentDate(date => new Date(date.getTime() + playbackSpeed * 1000));
       }, 1000);
       else frame = requestAnimationFrame(tick);
     };
-    sync(); document.addEventListener('visibilitychange', sync);
-    return () => { stop(); document.removeEventListener('visibilitychange', sync); };
+    sync(); document.addEventListener('visibilitychange', sync); document.addEventListener(APP_VISIBILITY_EVENT, sync);
+    return () => { stop(); document.removeEventListener('visibilitychange', sync); document.removeEventListener(APP_VISIBILITY_EVENT, sync); };
   }, [isPlaying, playbackSpeed, reducedMotion]);
 
   // Real-time ticking when not playing (updates every 10 seconds to keep live accurate)
   useEffect(() => {
     if (isPlaying || !followLive) return;
     const interval = setInterval(() => {
-      if (document.hidden) return;
+      if (!isAppVisible()) return;
       // If within 1 minute of real current time, sync
       const now = new Date();
       if (Math.abs(now.getTime() - currentDate.getTime()) < 60000) {
@@ -210,7 +212,7 @@ export default function App() {
   const openTool = (tool: MobileTool) => {
     setIsPlaying(false);
     if (tool === 'tour') startTour();
-    if (tool === 'share') setShareUrl(createShareUrl(window.location.href, { date: currentDate, city: selectedCity, view: viewMode, layers }));
+    if (tool === 'share') setShareUrl(createShareUrl(shareBaseUrl(), { date: currentDate, city: selectedCity, view: viewMode, layers }));
     if (tool === 'calendar' && selectedCity) setIsCalendarOpen(true);
     if (tool === 'compare') setIsComparisonOpen(true);
     if (tool === 'sky' && selectedCity) setIsGroundSkyOpen(true);
@@ -253,12 +255,12 @@ export default function App() {
       {tourProgress !== null && <GlobeTour stops={tourStops} progress={tourProgress} reducedMotion={reducedMotion}
         currentDate={currentDate} onProgress={setTourProgress} onClose={closeTour} />}
       {tourProgress === null && <>
-      <div className="hidden lg:flex absolute top-24 left-4 z-20 flex-wrap gap-2 " style={{ right: viewMode === '3d-globe' && selectedCity ? '22.5rem' : '1rem' }}>
+      <div className="desktop-chrome hidden lg:flex absolute top-24 left-4 z-20 flex-wrap gap-2 " style={{ right: viewMode === '3d-globe' && selectedCity ? '22.5rem' : '1rem' }}>
         <button onClick={() => setIsNavigationOpen(true)} className="shrink-0 rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-slate-200 cursor-pointer">Navigation</button>
         <button onClick={toggleCityLock} disabled={!selectedCity} aria-pressed={isCityLocked} title="Lock / unlock city (L)"
           className="shrink-0 rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-sky-300 disabled:opacity-40 cursor-pointer">{isCityLocked ? 'Unlock city' : 'Lock city'}</button>
         <button data-testid="desktop-tour-launch" onClick={startTour} className="shrink-0 rounded-xl border border-sky-700 bg-slate-900/90 px-3 py-2 text-xs text-sky-300 cursor-pointer">Helix globe tour</button>
-        <button onClick={() => setShareUrl(createShareUrl(window.location.href, {
+        <button onClick={() => setShareUrl(createShareUrl(shareBaseUrl(), {
           date: currentDate, city: selectedCity, view: viewMode, layers,
         }))} className="shrink-0 whitespace-nowrap rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-sky-300 hover:bg-slate-800 cursor-pointer">
           Share view

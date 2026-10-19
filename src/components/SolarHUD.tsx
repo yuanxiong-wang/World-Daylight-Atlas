@@ -97,7 +97,7 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
   return (
     <>
       {/* Top Bar Header (Compact & Minimal) */}
-      <header className="absolute top-4 left-4 right-4 z-20 hidden lg:flex items-center justify-between pointer-events-none gap-2">
+      <header className="desktop-chrome absolute top-4 left-4 right-4 z-20 hidden lg:flex items-center justify-between pointer-events-none gap-2">
         {/* Brand & Real-time Subsolar Metrics */}
         <div className="pointer-events-auto bg-slate-900/85 backdrop-blur-md border border-slate-700/80 rounded-xl px-3 sm:px-4 py-2.5 shadow-xl flex items-center gap-3 sm:gap-4 text-white w-full sm:w-auto min-w-0">
           <div className="flex items-center gap-2.5">
@@ -181,7 +181,7 @@ export const SolarHUD: React.FC<SolarHUDProps> = ({
 
       {/* Unified Bottom Control Dock (Adheres strictly to Three.js Ergonomic Bottom Dock Specification) */}
       <div data-testid="desktop-dock"
-        className="hidden lg:block fixed bottom-5 left-4 right-4 z-30 max-w-4xl mx-auto"
+        className="desktop-chrome hidden lg:block fixed bottom-5 left-4 right-4 z-30 max-w-4xl mx-auto"
         style={{ right: viewMode === '3d-globe' && selectedCity ? '22.5rem' : '1rem' }}
       >
         <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col text-slate-200 max-h-[calc(100dvh-13rem)]">

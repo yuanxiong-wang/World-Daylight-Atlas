@@ -26,3 +26,14 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(100, 116, 139, 1);
 }
+
+
+/* Native iPhone/iPad uses the compact, single-sheet interface at every width. */
+.native-app .desktop-chrome { display: none !important; }
+.native-app .native-mobile-controls { display: block !important; }
+.native-app body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+.native-app [data-testid="mobile-header"], .native-app [data-testid="mobile-navigation"] {
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
+}
+.native-app [role="dialog"] { max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1.5rem); }
