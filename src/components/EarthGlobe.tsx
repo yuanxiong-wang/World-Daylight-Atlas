@@ -1,3 +1,4 @@
+import { isAppVisible, APP_VISIBILITY_EVENT } from '../utils/appVisibility';
 import { isCompactViewport } from '../utils/platform';
 import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import * as THREE from 'three';
@@ -535,7 +536,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     const beginSnap = () => {
       snapTimer = null;
       const state = behaviorRef.current;
-      if (!state.options.snapping || state.locked || reducedMotionRef.current || tourRef.current || dragging || document.hidden || !renderActiveRef.current || !container.getClientRects().length) return;
+      if (!state.options.snapping || state.locked || reducedMotionRef.current || tourRef.current || dragging || !isAppVisible() || !renderActiveRef.current || !container.getClientRects().length) return;
       // Flush residual orbit damping before taking the starting camera snapshot.
       controls.enableDamping = false; controls.update(); camera.updateMatrixWorld();
       const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(), camera);
@@ -560,6 +561,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     const activityEvents = ['pointerdown', 'pointermove', 'wheel', 'keydown', 'touchstart'] as const;
     activityEvents.forEach(event => window.addEventListener(event, activity, { capture: true, passive: true }));
     document.addEventListener('visibilitychange', activity);
+    document.addEventListener(APP_VISIBILITY_EVENT, activity);
 
     let spiralSignature = '';
     const spiralTargets = new Map<string, { position: THREE.Vector3; expanded: boolean }>();
@@ -691,6 +693,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       controls.removeEventListener('start', startDrag); controls.removeEventListener('end', endDrag);
       activityEvents.forEach(event => window.removeEventListener(event, activity, true));
       document.removeEventListener('visibilitychange', activity);
+      document.removeEventListener(APP_VISIBILITY_EVENT, activity);
       frameLoop.dispose();
       frameLoopRef.current = null;
       window.removeEventListener('resize', handleResize);

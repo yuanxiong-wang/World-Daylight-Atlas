@@ -50,15 +50,18 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO build | tee simulator-build.log
+      - name: Package simulator app
+        run: ditto -c -k --sequesterRsrc --keepParent build/ios/Build/Products/Debug-iphonesimulator/App.app build/DaylightAtlas-simulator.zip
       - name: Launch on iPhone and iPad simulators
+        timeout-minutes: 10
         run: |
           python3 scripts/ios-smoke.py
       - name: Build unsigned device archive
         run: |
           set -o pipefail
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -archivePath build/DaylightAtlas.xcarchive CODE_SIGNING_ALLOWED=NO archive | tee archive-build.log
-      - name: Package simulator app
-        run: ditto -c -k --sequesterRsrc --keepParent build/ios/Build/Products/Debug-iphonesimulator/App.app build/DaylightAtlas-simulator.zip
+      - name: Package unsigned device archive
+        run: ditto -c -k --sequesterRsrc --keepParent build/DaylightAtlas.xcarchive build/DaylightAtlas-unsigned-archive.zip
       - name: Save simulator app, screenshots and logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -66,6 +69,7 @@ jobs:
           name: daylight-atlas-ios
           path: |
             build/DaylightAtlas-simulator.zip
+            build/DaylightAtlas-unsigned-archive.zip
             build/ios-smoke/
             test-results/
             simulator-build.log
