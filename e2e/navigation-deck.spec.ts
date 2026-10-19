@@ -64,6 +64,8 @@ test('idle drift waits thirty seconds, preserves simulation time, and respects l
   await page.clock.fastForward(31000); await expect(globe).toHaveAttribute('data-motion', 'manual');
   await page.getByRole('button', { name: 'Unlock city', exact: true }).click();
   await page.emulateMedia({ reducedMotion: 'reduce' });
+  // Media changes arrive asynchronously; wait for React before advancing the fake clock.
+  await expect(page.getByText('Reduced motion: playback steps once per second; automatic rotation is off.', { exact: true })).toBeVisible();
   await page.clock.fastForward(31000); await expect(globe).toHaveAttribute('data-motion', 'manual');
   await page.getByRole('button', { name: 'Navigation', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: 'Ambient idle drift', exact: false })).toBeDisabled();
