@@ -1,0 +1,73 @@
+name: iOS simulator and archive
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Select Xcode 26 or newer
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, plistlib
+          versions = []
+          for app in pathlib.Path('/Applications').glob('Xcode*.app'):
+              info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
+              version = tuple(map(int, info['CFBundleShortVersionString'].split('.')))
+              if version[0] >= 26:
+                  versions.append((version, app))
+          if not versions:
+              raise SystemExit('Capacitor 8 requires Xcode 26 or newer')
+          app = max(versions)[1]
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f'DEVELOPER_DIR={app}/Contents/Developer\n')
+          print(app)
+          PY
+      - name: Install dependencies
+        run: npm install --no-package-lock
+      - name: Check types and numerical regressions
+        run: |
+          npm run lint
+          npm test
+      - name: Package offline app and native plugins
+        run: npm run ios:sync
+      - name: Install browser for bundled UI checks
+        run: npx playwright install chromium
+      - name: Check offline iPhone and iPad layouts
+        run: npx playwright test --config playwright.ios.config.ts
+      - name: Build iOS simulator app
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO build | tee simulator-build.log
+      - name: Launch on iPhone and iPad simulators
+        run: |
+          python3 scripts/ios-smoke.py
+      - name: Build unsigned device archive
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -archivePath build/DaylightAtlas.xcarchive CODE_SIGNING_ALLOWED=NO archive | tee archive-build.log
+      - name: Package simulator app
+        run: ditto -c -k --sequesterRsrc --keepParent build/ios/Build/Products/Debug-iphonesimulator/App.app build/DaylightAtlas-simulator.zip
+      - name: Save simulator app, screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daylight-atlas-ios
+          path: |
+            build/DaylightAtlas-simulator.zip
+            build/ios-smoke/
+            test-results/
+            simulator-build.log
+            archive-build.log
+          if-no-files-found: warn

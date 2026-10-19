@@ -1,3 +1,4 @@
+import { isCompactViewport } from '../utils/platform';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Clock, Layers, MapPin, Menu, Pause, Play } from 'lucide-react';
 import type { CityData, GlobeLayerSettings, ViewMode } from '../types';
@@ -40,7 +41,7 @@ export function MobileControls({ cityLocked, onToggleCityLock, reducedMotion, cu
   const lunar = useMemo(() => getLunarPhase(currentDate), [currentDate]);
   useEffect(() => {
     const desktop = window.matchMedia('(min-width: 1024px)');
-    const closeOnDesktop = () => { if (desktop.matches) setSheet(null); };
+    const closeOnDesktop = () => { if (!isCompactViewport()) setSheet(null); };
     desktop.addEventListener('change', closeOnDesktop);
     return () => desktop.removeEventListener('change', closeOnDesktop);
   }, []);
@@ -64,7 +65,7 @@ export function MobileControls({ cityLocked, onToggleCityLock, reducedMotion, cu
     timeZone: selectedCity.timezone, hour: '2-digit', minute: '2-digit',
   }) : '—';
   return (
-    <div className="lg:hidden">
+    <div className="native-mobile-controls lg:hidden">
       <header data-testid="mobile-header" className="fixed top-0 inset-x-0 z-20 flex items-center justify-between gap-2 border-b border-slate-700/60 bg-slate-950/85 backdrop-blur-md px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
         <div className="min-w-0">
           <h1 className="text-xs font-semibold text-white truncate">World Daylight Atlas</h1>

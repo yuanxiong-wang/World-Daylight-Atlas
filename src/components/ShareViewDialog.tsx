@@ -1,3 +1,4 @@
+import { copyText, isNative, shareView } from '../utils/platform';
 import React, { useState } from 'react';
 import { createCoordinateUrl, readSharedView } from '../utils/viewState';
 import { Dialog } from './Dialog';
@@ -8,7 +9,7 @@ export function ShareViewDialog({ url, onClose }: { url: string; onClose: () => 
   const [message, setMessage] = useState('');
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(url);
+      await copyText(url);
       setMessage('Link copied.');
     } catch {
       setMessage('Clipboard access is unavailable. Select the link below and copy it manually.');
@@ -22,10 +23,14 @@ export function ShareViewDialog({ url, onClose }: { url: string; onClose: () => 
         <input id="shared-view-url" value={url} readOnly onFocus={event => event.target.select()}
           className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-3 text-sm text-sky-200 select-text" />
         <button onClick={copy} className="rounded-lg bg-sky-600 hover:bg-sky-500 px-4 py-2 font-semibold cursor-pointer">Copy link</button>
+        {isNative && <button onClick={async () => {
+          try { await shareView(url); setMessage('Share sheet closed.'); }
+          catch { setMessage('Sharing was cancelled or unavailable. You can copy the link instead.'); }
+        }} className="ml-2 rounded-lg bg-slate-700 px-4 py-2 font-semibold">Share…</button>}
         {coordinateUrl && <div className="space-y-2 pt-3 border-t border-slate-700">
           <label htmlFor="coordinate-link" className="block text-sm font-medium">Coordinate link (opens inspector)</label>
           <input id="coordinate-link" readOnly value={coordinateUrl} onFocus={event => event.target.select()} className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-3 text-sm text-sky-200 select-text" />
-          <button onClick={async () => { try { await navigator.clipboard.writeText(coordinateUrl); setMessage('Coordinate link copied.'); } catch { setMessage('Select the coordinate link and copy it manually.'); } }} className="min-h-11 rounded-lg bg-slate-800 px-4 text-sm cursor-pointer">Copy coordinate link</button>
+          <button onClick={async () => { try { await copyText(coordinateUrl); setMessage('Coordinate link copied.'); } catch { setMessage('Select the coordinate link and copy it manually.'); } }} className="min-h-11 rounded-lg bg-slate-800 px-4 text-sm cursor-pointer">Copy coordinate link</button>
           <p className="text-xs text-slate-400">Uses lat, lng, and UTC date parameters. Set inspector=0 to open the globe without the chart. Layer settings use defaults.</p>
         </div>}
         <p role="status" aria-live="polite" className="text-sm text-sky-300 min-h-5">{message}</p>

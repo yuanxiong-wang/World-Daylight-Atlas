@@ -10,7 +10,10 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "build:ios": "vite build --mode ios",
+    "ios:sync": "npm run build:ios && cap sync ios && node scripts/prepare-ios.mjs",
+    "ios:open": "cap open ios"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -25,7 +28,12 @@
     "react-dom": "^19.0.1",
     "three": "^0.186.1",
     "vite": "^8.3.0",
-    "astronomy-engine": "2.1.19"
+    "astronomy-engine": "2.1.19",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/ios": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/share": "8.0.3",
+    "@capacitor/clipboard": "8.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
@@ -37,6 +45,7 @@
     "tsx": "^4.21.0",
     "typescript": "^7.0.2",
     "@types/express": "^4.17.21",
-    "@playwright/test": "^1.56.0"
+    "@playwright/test": "^1.56.0",
+    "@capacitor/cli": "8.5.3"
   }
 }

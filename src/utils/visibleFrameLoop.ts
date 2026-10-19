@@ -1,3 +1,4 @@
+import { isAppVisible, APP_VISIBILITY_EVENT } from './appVisibility.ts';
 /** Suspend GPU work offscreen/in hidden tabs; restart with a fresh frame clock. */
 export function createVisibleFrameLoop(element: HTMLElement, draw: (time: number, delta: number) => void,
   enabled: () => boolean = () => true) {
@@ -5,7 +6,7 @@ export function createVisibleFrameLoop(element: HTMLElement, draw: (time: number
   let intersecting = true;
   let disposed = false;
   let previous = performance.now();
-  const visible = () => !disposed && !document.hidden && intersecting && enabled() && element.getClientRects().length > 0;
+  const visible = () => !disposed && isAppVisible() && intersecting && enabled() && element.getClientRects().length > 0;
   const tick = (time: number) => {
     frame = null;
     if (!visible()) { sync(); return; }
@@ -29,9 +30,9 @@ export function createVisibleFrameLoop(element: HTMLElement, draw: (time: number
     sync();
   });
   observer.observe(element);
-  document.addEventListener('visibilitychange', sync);
+  document.addEventListener('visibilitychange', sync); document.addEventListener(APP_VISIBILITY_EVENT, sync);
   sync();
   return { sync, dispose: () => {
-    disposed = true; sync(); observer.disconnect(); document.removeEventListener('visibilitychange', sync);
+    disposed = true; sync(); observer.disconnect(); document.removeEventListener('visibilitychange', sync); document.removeEventListener(APP_VISIBILITY_EVENT, sync);
   } };
 }

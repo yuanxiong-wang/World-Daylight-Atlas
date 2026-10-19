@@ -1,3 +1,4 @@
+import { setNativeActive } from '../src/utils/appVisibility.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createVisibleFrameLoop } from '../src/utils/visibleFrameLoop.ts';
@@ -28,6 +29,10 @@ test('frames pause for hidden/offscreen/covered views and resume without catch-u
     document.hidden = false; document.dispatchEvent(new Event('visibilitychange'));
     advance(performance.now() + 3600000);
     assert.ok(lastDelta <= 0.1); assert.equal(draws, 2);
+    // iOS can background a WKWebView without changing document.hidden.
+    setNativeActive(false); assert.equal(frames.size, 0);
+    assert.equal(element.dataset.rendering, 'paused');
+    setNativeActive(true); assert.equal(frames.size, 1);
     intersect([{ isIntersecting: false }]); assert.equal(frames.size, 0);
     intersect([{ isIntersecting: true }]); assert.equal(frames.size, 1);
     enabled = false; loop.sync(); assert.equal(frames.size, 0);
@@ -35,6 +40,7 @@ test('frames pause for hidden/offscreen/covered views and resume without catch-u
     loop.dispose(); assert.equal(frames.size, 0); assert.ok(disconnected);
     document.dispatchEvent(new Event('visibilitychange')); assert.equal(frames.size, 0);
   } finally {
+    setNativeActive(true);
     for (const [key, value] of Object.entries(saved)) {
       if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
     }

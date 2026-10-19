@@ -3,9 +3,15 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), {
+      name: 'offline-ios-fonts',
+      transformIndexHtml(html) {
+        return mode === 'ios' ? html.replace(/<link[^>]+(?:fonts\.googleapis\.com|fonts\.gstatic\.com)[^>]*>/g, '') : html;
+      },
+    }],
+    build: { outDir: mode === 'ios' ? 'dist-ios' : 'dist' },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -20,3 +26,4 @@ export default defineConfig(() => {
     },
   };
 });
+
