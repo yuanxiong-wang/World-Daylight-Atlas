@@ -6,7 +6,7 @@ iPhone and iPad use the compact, single-sheet controls at every size. Native bac
 
 ## Build and run
 
-Requires macOS, **Xcode 26 or newer**, Node.js 22 or newer (CI uses 24), and an iOS 15+ simulator/device.
+Requires macOS, **Xcode 26 or newer**, Node.js 22 or newer (CI uses 24), and an iOS 17+ simulator/device.
 
 ```sh
 npm install --no-package-lock
@@ -20,7 +20,7 @@ The provisional bundle identifier is `cc.ccwu.mytest.atlas` and the home screen 
 
 ## Automated checks
 
-The **iOS simulator and archive** GitHub Actions workflow checks types and numerical regressions, tests the bundled interface at iPhone and iPad widths while blocking outside requests, compiles an unsigned simulator app, boots it on iPhone and iPad simulators, captures screenshots/logs, and builds an unsigned device archive. Download the **daylight-atlas-ios** artifact from a successful run to inspect the simulator application, screenshots and unsigned device archive. The unsigned archive is for inspection and still requires signing before distribution. The simulator ZIP cannot be installed on a real iPhone. Launch screenshots are smoke checks, not a substitute for device testing or accessibility review.
+The **iOS simulator and archive** GitHub Actions workflow checks types and numerical regressions, tests the bundled interface at iPhone and iPad widths while blocking outside requests, compiles an unsigned simulator app, boots it on iPhone and iPad simulators using an installed supported runtime, captures screenshots/logs, and builds an unsigned device archive. The **daylight-atlas-ios-builds** artifact contains the simulator application and unsigned device archive; **daylight-atlas-ios-checks** contains screenshots and logs. Compiled applications are uploaded before simulator startup so slow hosted simulators cannot block their download. The unsigned archive is for inspection and still requires signing before distribution. The simulator ZIP cannot be installed on a real iPhone. Launch screenshots are smoke checks, not a substitute for device testing or accessibility review.
 
 ```sh
 npm run build:ios

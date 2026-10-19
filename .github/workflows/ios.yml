@@ -2,6 +2,7 @@ name: iOS simulator and archive
 on:
   push:
     branches: [main]
+    paths-ignore: ['README.md', 'IOS.md', 'e2e/**', 'tests/**', 'playwright.config.ts']
   workflow_dispatch:
 permissions:
   contents: read
@@ -42,34 +43,39 @@ jobs:
           npm test
       - name: Package offline app and native plugins
         run: npm run ios:sync
-      - name: Install browser for bundled UI checks
-        run: npx playwright install chromium
-      - name: Check offline iPhone and iPad layouts
-        run: npx playwright test --config playwright.ios.config.ts
-      - name: Build iOS simulator app
-        run: |
-          set -o pipefail
-          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO build | tee simulator-build.log
-      - name: Package simulator app
-        run: ditto -c -k --sequesterRsrc --keepParent build/ios/Build/Products/Debug-iphonesimulator/App.app build/DaylightAtlas-simulator.zip
-      - name: Launch on iPhone and iPad simulators
-        timeout-minutes: 10
-        run: |
-          python3 scripts/ios-smoke.py
       - name: Build unsigned device archive
         run: |
           set -o pipefail
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -archivePath build/DaylightAtlas.xcarchive CODE_SIGNING_ALLOWED=NO archive | tee archive-build.log
       - name: Package unsigned device archive
         run: ditto -c -k --sequesterRsrc --keepParent build/DaylightAtlas.xcarchive build/DaylightAtlas-unsigned-archive.zip
+      - name: Build iOS simulator app
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO build | tee simulator-build.log
+      - name: Package simulator app
+        run: ditto -c -k --sequesterRsrc --keepParent build/ios/Build/Products/Debug-iphonesimulator/App.app build/DaylightAtlas-simulator.zip
+      - name: Save compiled apps before simulator startup
+        uses: actions/upload-artifact@v4
+        with:
+          name: daylight-atlas-ios-builds
+          path: |
+            build/DaylightAtlas-simulator.zip
+            build/DaylightAtlas-unsigned-archive.zip
+          compression-level: 0
+      - name: Install browser for bundled UI checks
+        run: npx playwright install chromium
+      - name: Check offline iPhone and iPad layouts
+        run: npx playwright test --config playwright.ios.config.ts
+      - name: Launch on iPhone and iPad simulators
+        timeout-minutes: 10
+        run: python3 scripts/ios-smoke.py
       - name: Save simulator app, screenshots and logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: daylight-atlas-ios
+          name: daylight-atlas-ios-checks
           path: |
-            build/DaylightAtlas-simulator.zip
-            build/DaylightAtlas-unsigned-archive.zip
             build/ios-smoke/
             test-results/
             simulator-build.log
