@@ -20,7 +20,7 @@ The provisional bundle identifier is `cc.ccwu.mytest.atlas` and the home screen 
 
 ## Automated checks
 
-The **iOS simulator and archive** GitHub Actions workflow checks types and numerical regressions, tests the bundled interface at iPhone and iPad widths while blocking outside requests, compiles an unsigned simulator app, boots it on iPhone and iPad simulators, captures screenshots/logs, and builds an unsigned device archive. Download the **daylight-atlas-ios** artifact from a successful run to inspect the simulator application and screenshots. The simulator ZIP cannot be installed on a real iPhone. Launch screenshots are smoke checks, not a substitute for device testing or accessibility review.
+The **iOS simulator and archive** GitHub Actions workflow checks types and numerical regressions, tests the bundled interface at iPhone and iPad widths while blocking outside requests, compiles an unsigned simulator app, boots it on iPhone and iPad simulators, captures screenshots/logs, and builds an unsigned device archive. Download the **daylight-atlas-ios** artifact from a successful run to inspect the simulator application, screenshots and unsigned device archive. The unsigned archive is for inspection and still requires signing before distribution. The simulator ZIP cannot be installed on a real iPhone. Launch screenshots are smoke checks, not a substitute for device testing or accessibility review.
 
 ```sh
 npm run build:ios

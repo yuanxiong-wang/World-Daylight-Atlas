@@ -30,7 +30,7 @@ export function Dialog({ title, onClose, children, placement = 'center' }: {
     return () => { dialog.removeEventListener('keydown', handleKey); previous?.focus(); };
   }, []);
   return (
-    <div className={`fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex justify-center ${placement === 'bottom' ? 'items-end' : 'p-3 sm:p-6 items-center'}`}
+    <div className={`atlas-dialog-overlay fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex justify-center ${placement === 'bottom' ? 'items-end' : 'p-3 sm:p-6 items-center'}`}
       onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
       <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
         className={`w-full flex flex-col border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl outline-none ${placement === 'bottom' ? 'max-w-2xl max-h-[72dvh] rounded-t-2xl pb-[env(safe-area-inset-bottom)]' : 'max-w-5xl max-h-[92dvh] rounded-2xl'}`}>

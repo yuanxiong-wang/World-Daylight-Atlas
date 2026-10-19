@@ -13,3 +13,8 @@ test-results/
 
 dist-ios/
 ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png
+
+__pycache__/
+*.p12
+*.p8
+*.mobileprovision

@@ -5,8 +5,8 @@ import subprocess
 import time
 
 
-def run(*args):
-    return subprocess.check_output(args, text=True)
+def run(*args, timeout=240):
+    return subprocess.check_output(args, text=True, timeout=timeout)
 
 
 output = Path('build/ios-smoke')
@@ -22,6 +22,7 @@ for family in ['iPhone', 'iPad']:
         raise SystemExit(f'No {family} simulator available')
     device = candidates[0]
     udid = device['udid']
+    print(f'Booting {device["name"]}', flush=True)
     if device['state'] != 'Booted':
         run('xcrun', 'simctl', 'boot', udid)
     run('xcrun', 'simctl', 'bootstatus', udid, '-b')
@@ -31,6 +32,10 @@ for family in ['iPhone', 'iPad']:
     print(device['name'], result, flush=True)
     time.sleep(15)
     run('xcrun', 'simctl', 'io', udid, 'screenshot', str(output / f'{family}.png'))
-    (output / f'{family}.log').write_text(run('xcrun', 'simctl', 'spawn', udid, 'log', 'show', '--last', '1m', '--style', 'compact', '--predicate', 'process == "App"'))
+    try:
+        logs = run('xcrun', 'simctl', 'spawn', udid, 'log', 'show', '--last', '1m', '--style', 'compact', '--predicate', 'process == "App"', timeout=30)
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as error:
+        logs = f'Optional unified log collection unavailable: {error}'
+    (output / f'{family}.log').write_text(logs)
     run('xcrun', 'simctl', 'terminate', udid, 'cc.ccwu.mytest.atlas')
     run('xcrun', 'simctl', 'shutdown', udid)

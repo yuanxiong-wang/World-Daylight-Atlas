@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-for (const viewport of [{ width: 393, height: 852 }, { width: 1194, height: 834 }]) {
+for (const viewport of [{ width: 393, height: 852 }, { width: 852, height: 393 }, { width: 1194, height: 834 }]) {
   test(`bundled atlas and compact controls at ${viewport.width}px`, async ({ page }) => {
     await page.setViewportSize(viewport);
     const errors: string[] = [];

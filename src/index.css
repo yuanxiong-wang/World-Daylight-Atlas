@@ -37,3 +37,8 @@
   padding-right: max(0.75rem, env(safe-area-inset-right));
 }
 .native-app [role="dialog"] { max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1.5rem); }
+
+.native-app .atlas-dialog-overlay {
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
+}
