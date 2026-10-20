@@ -217,3 +217,5 @@ Use **Previous stop**, **Next stop**, the progress slider, arrow/Page keys, or H
 A bundled Capacitor iOS project lives in `ios/`. It uses the compact controls on iPhone and iPad, supports native sharing, pauses rendering/playback in the background, and works offline with the 45 built-in cities. Worldwide city search still requires a connection. The GitHub Pages site remains available and is the destination for shared links.
 
 See [IOS.md](IOS.md) for building with Xcode 26+, simulator checks, and the **TestFlight first → App Store** release process. Run `npm run ios:sync` before opening the project with `npm run ios:open`. TestFlight distribution requires an active Apple Developer Program membership; automated builds are unsigned and do not upload to Apple.
+
+The [BinaryExplorer inspection workflow](.github/workflows/inspect-ios-binary.yml) also produces static binary, privacy and configuration findings from a selected unsigned iOS build. See [the inspection instructions](IOS.md#binaryexplorer-inspection) for the report and an analysis-only IPA that can be opened in BinaryExplorer on macOS.
