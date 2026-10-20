@@ -1,0 +1,72 @@
+name: Inspect iOS build with BinaryExplorer
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Successful iOS workflow run containing daylight-atlas-ios-builds
+        default: '39276714714'
+        required: true
+  push:
+    branches: [main]
+    paths: ['.github/workflows/inspect-ios-binary.yml', '.github/scripts/inspect-ios-binary.swift']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Fetch pinned BinaryExplorer sources
+        uses: actions/checkout@v4
+        with:
+          repository: Viktorianec/BinaryExplorer
+          ref: cfe10349910006d639684713bfff107be30a9996
+          path: .tools/BinaryExplorer
+          persist-credentials: false
+      - name: Download the unsigned native builds
+        uses: actions/download-artifact@v4
+        with:
+          name: daylight-atlas-ios-builds
+          run-id: ${{ inputs.build_run_id || '39276714714' }}
+          github-token: ${{ github.token }}
+          path: build/input
+      - name: Repackage device app for inspection
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile
+          archive = Path('build/input/DaylightAtlas-unsigned-archive.zip')
+          output = Path('build/binary-inspection')
+          output.mkdir(parents=True, exist_ok=True)
+          marker = '/Products/Applications/'
+          count = 0
+          with zipfile.ZipFile(archive) as src, zipfile.ZipFile(output / 'DaylightAtlas-unsigned-inspection.ipa', 'w', compression=zipfile.ZIP_STORED) as dst:
+              for entry in src.infolist():
+                  if marker not in entry.filename or entry.is_dir():
+                      continue
+                  relative = entry.filename.split(marker, 1)[1]
+                  if '..' in Path(relative).parts:
+                      raise SystemExit('Unsafe archive member')
+                  dst.writestr('Payload/' + relative, src.read(entry))
+                  count += 1
+          if not count:
+              raise SystemExit('No device app found in the archive')
+          print(f'Packaged {count} app files for inspection; this IPA is unsigned and not installable.')
+          PY
+      - name: Compile BinaryExplorer Core with the report adapter
+        run: swiftc -swift-version 5 -parse-as-library .tools/BinaryExplorer/BinaryExplorer/Core/*.swift .github/scripts/inspect-ios-binary.swift -o build/inspect-ios-binary
+      - name: Inspect with BinaryExplorer
+        run: |
+          build/inspect-ios-binary build/binary-inspection/DaylightAtlas-unsigned-inspection.ipa build/binary-inspection cfe10349910006d639684713bfff107be30a9996
+          cat build/binary-inspection/binary-explorer-report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Save findings and analysis-only IPA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-explorer-inspection
+          path: build/binary-inspection/
+          if-no-files-found: error
