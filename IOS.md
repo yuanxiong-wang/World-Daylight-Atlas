@@ -43,3 +43,13 @@ The existing Pages workflow and browser tests remain separate. Both builds use t
 Before submitting, prepare device screenshots, description, age rating, support URL, a public privacy policy and accurate App Privacy answers. The app requests no GPS, camera, microphone or photo-library access, and has no account, advertising or analytics integration. The native privacy manifest declares no first-party collection or tracking; plugin manifests are included by Swift Package Manager. Worldwide searches send the entered query to Open-Meteo over HTTPS; review its current privacy practices when completing the store disclosures. Shared links contain the selected city coordinates.
 
 The encryption declaration covers standard platform HTTPS only; revisit it if encryption features change. The app has not been submitted to Apple, and App Review acceptance is not guaranteed. Universal links, push notifications, purchases and background location are not configured. Apple signing and App Store Connect setup are intentionally left to the developer account owner.
+
+## BinaryExplorer inspection
+
+The **Inspect iOS build with BinaryExplorer** workflow runs the unmodified parsing and insight engine from [Viktorianec/BinaryExplorer](https://github.com/Viktorianec/BinaryExplorer), pinned to `cfe10349910006d639684713bfff107be30a9996`. A small report adapter runs it on macOS without opening the desktop UI. No BinaryExplorer source or executable is bundled in the atlas app.
+
+In GitHub Actions, run that workflow and enter a successful iOS build's run ID containing the `daylight-atlas-ios-builds` artifact. Download **binary-explorer-inspection** for the JSON and Markdown findings and `DaylightAtlas-unsigned-inspection.ipa`. This IPA repackages the device `.app` under `Payload/` solely for static inspection; it is unsigned and cannot be installed or uploaded to TestFlight. You can open it directly in the BinaryExplorer macOS app.
+
+The report covers Mach-O slices, linked libraries, bundle size, ATS, purpose strings, privacy manifests and the tool's findings. Missing distribution signatures and provisioning profiles are expected in this unsigned build. The inspection parses signing metadata; it does not establish cryptographic signature validity, guarantee the absence of secrets, or replace Apple validation. Repeat it against the final signed export before distribution.
+
+The [2026-10-20 inspection summary](docs/ios-binary-inspection.md) records the inspected build, tool revision, findings and interpretation of its unsigned-build notices.
