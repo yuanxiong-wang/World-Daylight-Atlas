@@ -41,6 +41,7 @@ jobs:
         run: |
           npm run lint
           npm test
+          python3 -m unittest discover -s tests -p 'test_ios_smoke.py'
       - name: Package offline app and native plugins
         run: npm run ios:sync
       - name: Build unsigned device archive
@@ -67,9 +68,14 @@ jobs:
         run: npx playwright install chromium
       - name: Check offline iPhone and iPad layouts
         run: npx playwright test --config playwright.ios.config.ts
-      - name: Launch on iPhone and iPad simulators
+      - name: Launch on iPhone simulator
+        id: iphone
         timeout-minutes: 10
-        run: python3 scripts/ios-smoke.py
+        run: python3 scripts/ios-smoke.py --family iPhone
+      - name: Launch on iPad simulator
+        if: ${{ !cancelled() && (success() || steps.iphone.outcome == 'failure') }}
+        timeout-minutes: 10
+        run: python3 scripts/ios-smoke.py --family iPad
       - name: Save simulator app, screenshots and logs
         if: always()
         uses: actions/upload-artifact@v4
