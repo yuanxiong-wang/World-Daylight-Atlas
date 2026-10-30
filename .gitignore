@@ -5,7 +5,6 @@ coverage/
 .DS_Store
 *.log
 .env*
-!.env.example
 
 
 playwright-report/
@@ -18,3 +17,19 @@ __pycache__/
 *.p12
 *.p8
 *.mobileprovision
+
+# Local Cloudflare state, secrets and signing material
+.wrangler/
+.dev.vars*
+*.pem
+*.key
+*.pfx
+*.keystore
+*.jks
+
+# Native exports and personal Xcode state
+*.ipa
+*.xcarchive/
+**/xcuserdata/
+*.xcuserstate
+.build/

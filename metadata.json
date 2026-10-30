@@ -2,5 +2,5 @@
   "name": "World Daylight Atlas - 3D Solar Tracking & Global Lighting",
   "description": "Interactive 3D visualization of global sunlight, daylight terminator, solar elevation, twilight transitions, and real-time celestial tracking.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

@@ -1,0 +1,12 @@
+title = "World Daylight Atlas repository privacy checks"
+
+[extend]
+useDefault = true
+
+# Account IDs are not credentials, but deployment configuration must be reusable.
+[[rules]]
+id = "cloudflare-account-identifier"
+description = "Account-specific Cloudflare identifier in configuration"
+regex = '''(?i)account[_-]?id["']?\s*[:=]\s*["']?([a-f0-9]{32})'''
+secretGroup = 1
+keywords = ["account_id", "accountId", "account-id"]

@@ -40,7 +40,7 @@ npm run dev
 
 Open [localhost:3000](http://localhost:3000).
 
-The current app runs in the browser and does not require API keys. Worldwide search requires an Internet connection to Open-Meteo; the 45 built-in cities remain available without that request. The variables in `.env.example` are retained from the original scaffold and are not used by the current app.
+The current app runs in the browser and does not require API keys. Worldwide search requires an Internet connection to Open-Meteo; the 45 built-in cities remain available without that request. No environment file or Gemini API key is needed; the unused API-key template and server-side AI capability declaration have been removed.
 
 ## Controls
 
@@ -78,6 +78,9 @@ Shortcuts are ignored in text inputs, selects, editable content, dialogs, and th
 | `npm run build` | Build production assets into `dist/` |
 | `npm run test:e2e` | Run Playwright browser checks against the production build |
 | `npm run preview` | Preview the production build locally |
+| `npm run build:ios` | Build bundled native assets into `dist-ios/` |
+| `npm run ios:sync` | Build and sync the native iOS project; generate the icon on macOS |
+| `npm run ios:open` | Open the native project in Xcode |
 
 Before publishing changes, run:
 
@@ -109,13 +112,13 @@ The custom domain is recorded in [CNAME](CNAME). Domain DNS and HTTPS are config
 
 [wrangler.jsonc](wrangler.jsonc) provides a static-assets Workers configuration. It builds the app and serves `dist/`.
 
-For your own deployment, update the Cloudflare account, Worker name, and custom domain in that file, authenticate Wrangler, then run:
+The checked-in Workers configuration contains no account ID or custom-domain route. Authenticate Wrangler with your own account, choose your Worker name, and deploy to its default Workers address:
 
 ```bash
 npx wrangler@4 deploy
 ```
 
-The current live site uses GitHub Pages; the Workers configuration is an alternative deployment path.
+Add a custom-domain route only in your own deployment configuration when you intend to use it. Keep Cloudflare tokens in your local environment or CI secrets. The current live site uses GitHub Pages; the Workers configuration is an alternative deployment path.
 
 ## Project structure
 
@@ -133,7 +136,7 @@ src/
     visibleFrameLoop.ts   Visibility-aware render scheduling
     earthTextures.ts      Procedural globe textures
 tests/                    Numerical regression checks
-.github/workflows/        GitHub Pages build and deployment
+.github/workflows/        Pages, iOS builds, binary inspection and privacy checks
 ```
 
 Built with React, TypeScript, Vite, Three.js, Tailwind CSS, and pinned Astronomy Engine 2.1.19.
@@ -219,3 +222,26 @@ A bundled Capacitor iOS project lives in `ios/`. It uses the compact controls on
 See [IOS.md](IOS.md) for building with Xcode 26+, simulator checks, and the **TestFlight first → App Store** release process. Run `npm run ios:sync` before opening the project with `npm run ios:open`. TestFlight distribution requires an active Apple Developer Program membership; automated builds are unsigned and do not upload to Apple.
 
 The [BinaryExplorer inspection workflow](.github/workflows/inspect-ios-binary.yml) also produces static binary, privacy and configuration findings from a selected unsigned iOS build. See [the inspection instructions](IOS.md#binaryexplorer-inspection) for the report and an analysis-only IPA that can be opened in BinaryExplorer on macOS.
+
+## Repository privacy and secrets
+
+The app needs no API credentials. Deployment tokens and Apple signing credentials belong in local secret storage or GitHub Actions secrets, never in source files, browser code, or a frontend build variable. `VITE_*` values are visible to users of a built website.
+
+- The optional Workers configuration is account-neutral. The public live-site domain and GitHub repository links are intentionally retained.
+- Git ignores environment files, Cloudflare `.dev.vars`/`.wrangler` state, private keys, signing profiles, native exports and personal Xcode state. Ignore rules do not remove files already tracked by Git.
+- [Repository privacy checks](.github/workflows/repository-privacy.yml) run checksum-pinned Gitleaks **8.30.1** on the current checkout for pushes and pull requests. The project configuration extends the standard credential rules and also rejects hardcoded Cloudflare account identifiers. Logs redact matching values.
+
+To scan a clean checkout locally with the same Gitleaks version:
+
+```sh
+gitleaks dir --redact --no-banner --config .gitleaks.toml .
+```
+
+On **2026-10-30**, the default Gitleaks rules reported no credential leaks in the current files or reachable Git history. The account identifier removed from the current Workers file is an identifier, not an authentication token. This scan does not certify that the repository contains no personal information.
+
+Earlier commits still retain historical configuration and author metadata. Current-file cleanup does not erase Git history, existing clones, cached views or old artifacts. A complete historical scrub requires a coordinated history rewrite. For future commits, enable GitHub email privacy and configure Git to use the noreply address GitHub provides; do not put a personal email address in examples or reports. If a real credential is ever committed, revoke or rotate it before attempting to erase its history.
+
+## Known validation gaps
+
+- Live time can stop following the clock after the app or tab has been hidden for over a minute; returning to **Now** resynchronizes it. This was reproduced in the latest code review and remains unresolved.
+- The latest reviewed iOS run compiled both native builds and passed the bundled UI checks, but its iPad simulator launch timed out. An earlier simulator run passed. Device compilation and static binary inspection do not replace testing on physical devices or a successful current simulator run.
