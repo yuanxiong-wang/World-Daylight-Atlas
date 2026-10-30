@@ -239,7 +239,7 @@ gitleaks dir --redact --no-banner --config .gitleaks.toml .
 
 On **2026-10-30**, the default Gitleaks rules reported no credential leaks in the current files or reachable Git history. The account identifier removed from the current Workers file is an identifier, not an authentication token. This scan does not certify that the repository contains no personal information.
 
-Earlier commits still retain historical configuration and author metadata. Current-file cleanup does not erase Git history, existing clones, cached views or old artifacts. A complete historical scrub requires a coordinated history rewrite. For future commits, enable GitHub email privacy and configure Git to use the noreply address GitHub provides; do not put a personal email address in examples or reports. If a real credential is ever committed, revoke or rotate it before attempting to erase its history.
+This branch’s history has been sanitized to remove the old Cloudflare account identifier and replace personal author/committer metadata with GitHub noreply identities. A history rewrite does not erase existing clones, forks, cached GitHub views or old artifacts; coordinate resynchronization of existing clones when publishing rewritten history. For future commits, enable GitHub email privacy and configure Git to use the noreply address GitHub provides; do not put a personal email address in examples or reports. If a real credential is ever committed, revoke or rotate it before attempting to erase its history.
 
 ## Known validation gaps
 
