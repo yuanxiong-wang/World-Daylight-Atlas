@@ -75,17 +75,23 @@ test('idle drift waits thirty seconds, preserves simulation time, and respects l
 });
 
 test('a small drag gently snaps the reticle without changing the city', async ({ page, baseURL }) => {
+  // Control both the drag-end debounce and animation clock. Software WebGL on CI
+  // must not determine whether we observe the beginning or end of a 900 ms snap.
+  await page.clock.install({ time: new Date('2026-11-06T12:00:00Z') });
+  await page.clock.pauseAt(new Date('2026-11-06T12:00:30Z'));
   await page.goto(createShareUrl(baseURL!, snapshot), { waitUntil: 'domcontentloaded' });
   const globe = page.getByTestId('globe-viewport');
   await expect(globe.locator('canvas')).toBeVisible();
+  await page.clock.fastForward(16);
   await page.mouse.move(640, 360); await page.mouse.down(); await page.mouse.move(640, 375, { steps: 5 }); await page.mouse.up();
-  // A slow CI frame can finish the 900 ms animation before an assertion polls it.
-  // Verify the settled camera's actual ray/Earth intersection instead.
+  await page.clock.fastForward(250);
   await expect(page.getByTestId('globe-reticle')).toContainText('0°E meridian');
+  await page.clock.fastForward(1000);
   await expect.poll(async () => {
     const value = await globe.getAttribute('data-snap-longitude');
     return value === null ? Infinity : Math.abs(Number(value));
   }).toBeLessThan(0.05);
+  await page.clock.fastForward(16);
   await expect(globe).toHaveAttribute('data-motion', 'manual');
   await expect(page.getByTestId('desktop-city-panel').getByRole('heading', { name: 'London', exact: true })).toBeVisible();
 });
