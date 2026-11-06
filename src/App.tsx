@@ -60,7 +60,14 @@ export default function App() {
     });
   };
   const [initialView] = useState(() => readLocationView(window.location.href, WORLD_CITIES));
-  const [currentDate, setCurrentDate] = useState<Date>(() => initialView?.date ?? new Date());
+  const [currentDate, setDateState] = useState<Date>(() => initialView?.date ?? new Date());
+  // Every entry point (playback, dock, sky view, calendar and globe picks) shares these bounds.
+  const setCurrentDate = useCallback<React.Dispatch<React.SetStateAction<Date>>>(update => {
+    setDateState(previous => {
+      const next = typeof update === 'function' ? update(previous) : update;
+      return Number.isFinite(next.getTime()) ? clampSimulationDate(next) : previous;
+    });
+  }, []);
   const [followLive, setFollowLive] = useState(!initialView);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -141,19 +148,33 @@ export default function App() {
     return () => { stop(); document.removeEventListener('visibilitychange', sync); document.removeEventListener(APP_VISIBILITY_EVENT, sync); };
   }, [isPlaying, playbackSpeed, reducedMotion]);
 
-  // Real-time ticking when not playing (updates every 10 seconds to keep live accurate)
+  // Follow the real clock explicitly, including an immediate refresh after backgrounding.
   useEffect(() => {
     if (isPlaying || !followLive) return;
-    const interval = setInterval(() => {
-      if (!isAppVisible()) return;
-      // If within 1 minute of real current time, sync
-      const now = new Date();
-      if (Math.abs(now.getTime() - currentDate.getTime()) < 60000) {
-        setCurrentDate(now);
-      }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isPlaying, currentDate, followLive]);
+    const sync = () => { if (isAppVisible()) setCurrentDate(new Date()); };
+    sync();
+    const interval = setInterval(sync, 1000);
+    document.addEventListener('visibilitychange', sync);
+    document.addEventListener(APP_VISIBILITY_EVENT, sync);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', sync);
+      document.removeEventListener(APP_VISIBILITY_EVENT, sync);
+    };
+  }, [isPlaying, followLive, setCurrentDate]);
+
+  const handleManualDate = useCallback((date: Date) => {
+    setFollowLive(false);
+    setIsPlaying(false);
+    setCurrentDate(date);
+  }, [setCurrentDate]);
+  const handleTogglePlay = useCallback(() => {
+    setFollowLive(false);
+    setIsPlaying(previous => !previous);
+  }, []);
+  useEffect(() => {
+    if (isPlaying && currentDate.getTime() === Date.UTC(2101, 0, 1) - 1) setIsPlaying(false);
+  }, [isPlaying, currentDate]);
 
   // Select city handler
   const handleSelectCity = useCallback((city: CityData | null) => {
@@ -189,7 +210,7 @@ export default function App() {
       const target = event.target instanceof Element ? event.target : null;
       if (target?.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"],[role="dialog"]')) return;
       if ((event.code === 'Space' || event.key === ' ') && !target?.closest('button,a[href]')) {
-        event.preventDefault(); if (!event.repeat) setIsPlaying(previous => !previous); return;
+        event.preventDefault(); if (!event.repeat) handleTogglePlay(); return;
       }
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault(); setIsPlaying(false); setFollowLive(false);
@@ -207,7 +228,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [modalOpen, tourProgress, selectedCity, handleResetToNow]);
+  }, [modalOpen, tourProgress, selectedCity, handleResetToNow, handleTogglePlay]);
 
   const openTool = (tool: MobileTool) => {
     setIsPlaying(false);
@@ -234,7 +255,7 @@ export default function App() {
           cities={WORLD_CITIES}
           selectedCity={selectedCity}
           onSelectCity={handleSelectCity}
-          onSelectDate={setCurrentDate}
+          onSelectDate={handleManualDate}
           onOpenDetails={() => setIsCityModalOpen(true)}
           layers={layers}
           onUpdateLayers={updateLayers}
@@ -292,9 +313,7 @@ export default function App() {
         onClose={() => setIsCalendarOpen(false)} onSelectDate={date => {
           const nextDate = new Date(date);
           nextDate.setUTCHours(currentDate.getUTCHours(), currentDate.getUTCMinutes(), currentDate.getUTCSeconds(), 0);
-          setCurrentDate(nextDate);
-          setFollowLive(false);
-          setIsPlaying(false);
+          handleManualDate(nextDate);
           setIsCalendarOpen(false);
         }} />}
 
@@ -305,27 +324,21 @@ export default function App() {
           setIsComparisonOpen(false);
         }} />}
       {isGroundSkyOpen && selectedCity && <GroundSkyView city={selectedCity} currentDate={currentDate}
-        onClose={() => setIsGroundSkyOpen(false)} onUpdateDate={date => {
-          setCurrentDate(date);
-          setFollowLive(false);
-          setIsPlaying(false);
-        }} />}
+        onClose={() => setIsGroundSkyOpen(false)} onUpdateDate={handleManualDate} />}
 
       <MobileControls cityLocked={isCityLocked} onToggleCityLock={toggleCityLock} currentDate={currentDate} cities={WORLD_CITIES} selectedCity={selectedCity}
         reducedMotion={reducedMotion} layers={layers} viewMode={viewMode} isPlaying={isPlaying} playbackSpeed={playbackSpeed}
-        onSelectCity={handleSelectCity} onUpdateDate={date => {
-          setCurrentDate(date); setFollowLive(false); setIsPlaying(false);
-        }} onUpdateLayers={updateLayers} onChangeViewMode={setViewMode}
-        onTogglePlay={() => setIsPlaying(playing => !playing)} onChangeSpeed={setPlaybackSpeed}
+        onSelectCity={handleSelectCity} onUpdateDate={handleManualDate} onUpdateLayers={updateLayers} onChangeViewMode={setViewMode}
+        onTogglePlay={handleTogglePlay} onChangeSpeed={setPlaybackSpeed}
         onResetToNow={handleResetToNow} onCameraPreset={setActiveCameraPreset} onOpenTool={openTool} />
 
       {/* Ergonomic Collapsible Bottom Control Dock */}
       <SolarHUD
         reducedMotion={reducedMotion}
         currentDate={currentDate}
-        onUpdateDate={setCurrentDate}
+        onUpdateDate={handleManualDate}
         isPlaying={isPlaying}
-        onTogglePlay={() => setIsPlaying((p) => !p)}
+        onTogglePlay={handleTogglePlay}
         playbackSpeed={playbackSpeed}
         onChangeSpeed={setPlaybackSpeed}
         onResetToNow={handleResetToNow}
@@ -347,7 +360,7 @@ export default function App() {
           currentDate={currentDate}
           subsolarPoint={subsolarPoint}
           onSelectDate={(newDate) => {
-            setCurrentDate(newDate);
+            handleManualDate(newDate);
             setIsAnalyticsOpen(false);
           }}
           onClose={() => setIsAnalyticsOpen(false)}

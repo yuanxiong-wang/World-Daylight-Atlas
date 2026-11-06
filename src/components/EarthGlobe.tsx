@@ -189,7 +189,75 @@ function createAtmosphereMaterial(): THREE.ShaderMaterial {
   });
 }
 
-// Dispose transient annotations before rebuilding them during playback.
+const EARTH_RADIUS = 50;
+const R_DOME = 15;
+function getObserverFrame(city: CityData) {
+  const pObs = latLngToVector3(city.lat, city.lng, EARTH_RADIUS + 0.08);
+  const up = pObs.clone().normalize();
+  const worldAxis = Math.abs(up.y) < 0.999 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, -1);
+  const north = worldAxis.clone().addScaledVector(up, -worldAxis.dot(up)).normalize();
+  const east = new THREE.Vector3().crossVectors(north, up).normalize();
+  return { pObs, up, north, east };
+}
+function computeDiurnalPath(city: CityData, date: Date, numSamples = 72) {
+  const { pObs, up, north, east } = getObserverFrame(city);
+  const allPts: { pt: THREE.Vector3; elev: number; az: number; date: Date }[] = [];
+
+  const bDate = new Date(date);
+  bDate.setUTCHours(0, 0, 0, 0);
+
+  let maxElev = -90;
+  let maxElevPt = pObs.clone();
+  let maxElevDate = date;
+
+  for (let i = 0; i <= numSamples; i++) {
+    const sampleTime = new Date(bDate.getTime() + (i / numSamples) * 86400000);
+    const pos = getSolarPosition(city.lat, city.lng, sampleTime);
+    const elRad = pos.elevation * (Math.PI / 180);
+    const azRad = pos.azimuth * (Math.PI / 180);
+
+    const localDir = new THREE.Vector3()
+      .addScaledVector(north, Math.cos(elRad) * Math.cos(azRad))
+      .addScaledVector(east, Math.cos(elRad) * Math.sin(azRad))
+      .addScaledVector(up, Math.sin(elRad));
+
+    const pt = pObs.clone().addScaledVector(localDir, R_DOME);
+    allPts.push({ pt, elev: pos.elevation, az: pos.azimuth, date: sampleTime });
+
+    if (pos.elevation > maxElev) {
+      maxElev = pos.elevation;
+      maxElevPt = pt;
+      maxElevDate = sampleTime;
+    }
+  }
+
+  // Horizon crossing points (Sunrise & Sunset)
+  let sunrisePt: THREE.Vector3 | null = null;
+  let sunsetPt: THREE.Vector3 | null = null;
+  for (let i = 0; i < allPts.length - 1; i++) {
+    const p1 = allPts[i];
+    const p2 = allPts[i + 1];
+    if (p1.elev < 0 && p2.elev >= 0) {
+      sunrisePt = p1.pt.clone().lerp(p2.pt, -p1.elev / (p2.elev - p1.elev));
+    } else if (p1.elev >= 0 && p2.elev < 0) {
+      sunsetPt = p1.pt.clone().lerp(p2.pt, p1.elev / (p1.elev - p2.elev));
+    }
+  }
+
+  const { daySegments, nightSegments } = splitSolarPath(allPts);
+  return {
+    daySegments: daySegments.filter(segment => segment.length >= 2).map(segment => segment.map(sample => sample.pt)),
+    nightSegments: nightSegments.filter(segment => segment.length >= 2).map(segment => segment.map(sample => sample.pt)),
+    allPts,
+    maxElev,
+    maxElevPt,
+    maxElevDate,
+    sunrisePt,
+    sunsetPt,
+  };
+}
+
+// Dispose annotations when their location, day, year or visibility changes.
 function clearAnnotationGroup(group: THREE.Group) {
   group.traverse(object => {
     if (object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Sprite) {
@@ -295,11 +363,13 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
   const terminatorLineRef = useRef<THREE.LineLoop | null>(null);
   const twilightLinesGroupRef = useRef<THREE.Group | null>(null);
   const sunTrajectoryGroupRef = useRef<THREE.Group | null>(null);
+  const dailyTrajectoryRef = useRef<THREE.Group | null>(null);
+  const seasonalTrajectoryRef = useRef<THREE.Group | null>(null);
+  const instantTrajectoryRef = useRef<THREE.Group | null>(null);
+  const updateInstantRef = useRef<((date: Date) => void) | null>(null);
   const subsolarLatitudeRingRef = useRef<THREE.Line | null>(null);
   const citiesGroupRef = useRef<THREE.Group | null>(null);
   const graticuleGroupRef = useRef<THREE.Group | null>(null);
-
-  const EARTH_RADIUS = 50;
 
   // Initialize Three.js scene once
   useEffect(() => {
@@ -363,6 +433,10 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
     // 7b. Sun Trajectory Sky Dome Overlay Group
     const sunTrajectoryGroup = new THREE.Group();
     sunTrajectoryGroupRef.current = sunTrajectoryGroup;
+    dailyTrajectoryRef.current = new THREE.Group();
+    seasonalTrajectoryRef.current = new THREE.Group();
+    instantTrajectoryRef.current = new THREE.Group();
+    sunTrajectoryGroup.add(dailyTrajectoryRef.current, seasonalTrajectoryRef.current, instantTrajectoryRef.current);
     scene.add(sunTrajectoryGroup);
 
     // 7c. Subsolar Latitude Parallel Ring (daily latitude of the sun)
@@ -665,7 +739,18 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
         camera.position.copy(snap.position).applyQuaternion(rotation);
         controls.target.copy(snap.target).applyQuaternion(rotation);
         controls.update(delta);
-        if (fraction === 1) { snap = null; controls.enabled = true; controls.enableDamping = !reducedMotionRef.current; }
+        if (fraction === 1) {
+          snap = null; controls.enabled = true; controls.enableDamping = !reducedMotionRef.current;
+          // Report the settled camera result, rather than a transient animation state.
+          camera.updateMatrixWorld();
+          const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(), camera);
+          const hit = earthMeshRef.current ? ray.intersectObject(earthMeshRef.current)[0] : null;
+          if (hit) {
+            const direction = hit.point.normalize();
+            container.dataset.snapLatitude = String(Math.asin(direction.y) * 180 / Math.PI);
+            container.dataset.snapLongitude = String(Math.atan2(-direction.z, direction.x) * 180 / Math.PI);
+          }
+        }
       } else {
         controls.update(delta);
         if (idle) {
@@ -807,16 +892,17 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
   }, [subsolarPoint]);
 
   // Build / Update 3D Sun Trajectory Across The Sky Overlay for Selected Location
+  const utcDay = currentDate.toISOString().slice(0, 10);
   const solarYear = currentDate.getUTCFullYear();
   const observerLatitude = selectedCity?.lat;
   const annualRange = useMemo(() => observerLatitude === undefined ? null :
     getAnnualSolarAltitudeRange(observerLatitude, solarYear), [observerLatitude, solarYear]);
 
   useEffect(() => {
-    const group = sunTrajectoryGroupRef.current;
+    const group = dailyTrajectoryRef.current;
     if (!group) return;
 
-    trajectoryPicksRef.current.clear();
+    group.traverse(object => trajectoryPicksRef.current.delete(object));
 
     // Clear previous trajectory objects
     clearAnnotationGroup(group);
@@ -836,18 +922,7 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       trajectoryPicksRef.current.set(target, payload);
     };
 
-    // 1. Observer position on Earth surface
-    const pObs = latLngToVector3(selectedCity.lat, selectedCity.lng, EARTH_RADIUS + 0.08);
-
-    // 2. Local Orthonormal Basis at Observer Location
-    const up = pObs.clone().normalize();
-    const worldAxis = Math.abs(up.y) < 0.999 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, -1);
-    const northUnnorm = worldAxis.clone().sub(up.clone().multiplyScalar(worldAxis.dot(up)));
-    const north = northUnnorm.normalize();
-    const east = new THREE.Vector3().crossVectors(north, up).normalize();
-
-    // Local Sky Dome Radius
-    const R_DOME = 15.0;
+    const { pObs, up, north, east } = getObserverFrame(selectedCity);
 
     // 3. Local Horizon Plane Disc & Ring
     const horizonPts: THREE.Vector3[] = [];
@@ -903,93 +978,8 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       group.add(sprite);
     });
 
-    // 4. Diurnal Sun Path Generator
-    const computeDiurnalPath = (date: Date, numSamples = 72) => {
-      const allPts: { pt: THREE.Vector3; elev: number; az: number; date: Date }[] = [];
-
-      const bDate = new Date(date);
-      bDate.setUTCHours(0, 0, 0, 0);
-
-      let maxElev = -90;
-      let maxElevPt = pObs.clone();
-      let maxElevDate = date;
-
-      for (let i = 0; i <= numSamples; i++) {
-        const sampleTime = new Date(bDate.getTime() + (i / numSamples) * 86400000);
-        const pos = getSolarPosition(selectedCity.lat, selectedCity.lng, sampleTime);
-        const elRad = pos.elevation * (Math.PI / 180);
-        const azRad = pos.azimuth * (Math.PI / 180);
-
-        const localDir = new THREE.Vector3()
-          .addScaledVector(north, Math.cos(elRad) * Math.cos(azRad))
-          .addScaledVector(east, Math.cos(elRad) * Math.sin(azRad))
-          .addScaledVector(up, Math.sin(elRad));
-
-        const pt = pObs.clone().addScaledVector(localDir, R_DOME);
-        allPts.push({ pt, elev: pos.elevation, az: pos.azimuth, date: sampleTime });
-
-        if (pos.elevation > maxElev) {
-          maxElev = pos.elevation;
-          maxElevPt = pt;
-          maxElevDate = sampleTime;
-        }
-      }
-
-      // Horizon crossing points (Sunrise & Sunset)
-      let sunrisePt: THREE.Vector3 | null = null;
-      let sunsetPt: THREE.Vector3 | null = null;
-      for (let i = 0; i < allPts.length - 1; i++) {
-        const p1 = allPts[i];
-        const p2 = allPts[i + 1];
-        if (p1.elev < 0 && p2.elev >= 0) {
-          sunrisePt = p1.pt.clone().lerp(p2.pt, -p1.elev / (p2.elev - p1.elev));
-        } else if (p1.elev >= 0 && p2.elev < 0) {
-          sunsetPt = p1.pt.clone().lerp(p2.pt, p1.elev / (p1.elev - p2.elev));
-        }
-      }
-
-      const { daySegments, nightSegments } = splitSolarPath(allPts);
-      return {
-        daySegments: daySegments.filter(segment => segment.length >= 2).map(segment => segment.map(sample => sample.pt)),
-        nightSegments: nightSegments.filter(segment => segment.length >= 2).map(segment => segment.map(sample => sample.pt)),
-        allPts,
-        maxElev,
-        maxElevPt,
-        maxElevDate,
-        sunrisePt,
-        sunsetPt,
-      };
-    };
-
     // Calculate Today's Solar Path
-    const todayPath = computeDiurnalPath(currentDate, 96);
-
-    // Four shared benchmarks; every milestone has one typed pick target.
-    if (layers.showSeasonalPaths) {
-      for (const milestone of getSolarMilestones(currentDate.getUTCFullYear())) {
-        const path = computeDiurnalPath(milestone.date, 72);
-        for (const points of path.daySegments) {
-          const curve = new THREE.CatmullRomCurve3(points, false);
-          group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.18, 8, false),
-            new THREE.MeshBasicMaterial({ color: milestone.color, transparent: true, opacity: 0.9 })));
-        }
-        for (const points of path.nightSegments) {
-          const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),
-            new THREE.LineDashedMaterial({ color: milestone.color, dashSize: 0.8, gapSize: 0.8,
-              transparent: true, opacity: 0.35 }));
-          line.computeLineDistances();
-          group.add(line);
-        }
-        const apex = new THREE.Mesh(new THREE.SphereGeometry(0.65, 16, 16),
-          new THREE.MeshBasicMaterial({ color: milestone.color }));
-        apex.position.copy(path.maxElevPt);
-        group.add(apex);
-        addPickTarget(path.maxElevPt, { date: path.maxElevDate, name: milestone.name });
-        const label = createLabelSprite(`${milestone.name} ${path.maxElev.toFixed(1)}°`, milestone.color, undefined, 1.375);
-        label.position.copy(path.maxElevPt.clone().addScaledVector(up, 1.8));
-        group.add(label);
-      }
-    }
+    const todayPath = computeDiurnalPath(selectedCity, new Date(utcDay), 96);
 
     // 6. Draw Today's Daylight Arc (Prominent Thick Glowing Golden Ribbon)
     for (const points of todayPath.daySegments) {
@@ -1078,51 +1068,90 @@ export const EarthGlobe: React.FC<EarthGlobeProps> = ({
       group.add(sLabel);
     }
 
-    // 9. Current Instantaneous Sun Position Bead & Sightline
-    const curPos = getSolarPosition(selectedCity.lat, selectedCity.lng, currentDate);
-    const curElRad = curPos.elevation * (Math.PI / 180);
-    const curAzRad = curPos.azimuth * (Math.PI / 180);
+  }, [selectedCity, utcDay, layers.showSunTrajectory]);
 
-    const curDir = new THREE.Vector3()
-      .addScaledVector(north, Math.cos(curElRad) * Math.cos(curAzRad))
-      .addScaledVector(east, Math.cos(curElRad) * Math.sin(curAzRad))
-      .addScaledVector(up, Math.sin(curElRad));
+  useEffect(() => {
+    const group = seasonalTrajectoryRef.current;
+    if (!group) return;
+    group.traverse(object => trajectoryPicksRef.current.delete(object));
+    clearAnnotationGroup(group);
+    if (!selectedCity || !layers.showSunTrajectory || !layers.showSeasonalPaths) return;
+    const { up } = getObserverFrame(selectedCity);
+    const addPickTarget = (position: THREE.Vector3, payload: SolarPickPayload) => {
+      const target = new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 8), new THREE.MeshBasicMaterial({ visible: false }));
+      target.position.copy(position); group.add(target); trajectoryPicksRef.current.set(target, payload);
+    };
+    // Four shared benchmarks; every milestone has one typed pick target.
+    if (layers.showSeasonalPaths) {
+      for (const milestone of getSolarMilestones(solarYear)) {
+        const path = computeDiurnalPath(selectedCity, milestone.date, 72);
+        for (const points of path.daySegments) {
+          const curve = new THREE.CatmullRomCurve3(points, false);
+          group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.18, 8, false),
+            new THREE.MeshBasicMaterial({ color: milestone.color, transparent: true, opacity: 0.9 })));
+        }
+        for (const points of path.nightSegments) {
+          const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),
+            new THREE.LineDashedMaterial({ color: milestone.color, dashSize: 0.8, gapSize: 0.8,
+              transparent: true, opacity: 0.35 }));
+          line.computeLineDistances();
+          group.add(line);
+        }
+        const apex = new THREE.Mesh(new THREE.SphereGeometry(0.65, 16, 16),
+          new THREE.MeshBasicMaterial({ color: milestone.color }));
+        apex.position.copy(path.maxElevPt);
+        group.add(apex);
+        addPickTarget(path.maxElevPt, { date: path.maxElevDate, name: milestone.name });
+        const label = createLabelSprite(`${milestone.name} ${path.maxElev.toFixed(1)}°`, milestone.color, undefined, 1.375);
+        label.position.copy(path.maxElevPt.clone().addScaledVector(up, 1.8));
+        group.add(label);
+      }
+    }
 
-    const curSunPos = pObs.clone().addScaledVector(curDir, R_DOME);
+  }, [selectedCity, solarYear, layers.showSunTrajectory, layers.showSeasonalPaths]);
 
-    // Glowing Sun Bead
-    const sunBeadGroup = new THREE.Group();
-    sunBeadGroup.position.copy(curSunPos);
-    sunBeadGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.9, 16, 16), new THREE.MeshBasicMaterial({ color: 0xffffff })));
-    sunBeadGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1.6, 16, 16), new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.65 })));
-    group.add(sunBeadGroup);
+  useEffect(() => {
+    const group = instantTrajectoryRef.current;
+    if (!group) return;
+    clearAnnotationGroup(group);
+    updateInstantRef.current = null;
+    if (!selectedCity || !layers.showSunTrajectory) return;
+    const { pObs, up, north, east } = getObserverFrame(selectedCity);
+    const bead = new THREE.Group();
+    bead.add(new THREE.Mesh(new THREE.SphereGeometry(0.9, 16, 16), new THREE.MeshBasicMaterial({ color: 0xffffff })));
+    bead.add(new THREE.Mesh(new THREE.SphereGeometry(1.6, 16, 16), new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.65 })));
+    const makeLineGeometry = () => new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    const sightline = new THREE.Line(makeLineGeometry(), new THREE.LineBasicMaterial({ color: 0xffea00, transparent: true, opacity: 0.85 }));
+    const drop = new THREE.Line(makeLineGeometry(), new THREE.LineDashedMaterial({ color: 0x38bdf8, dashSize: 0.6, gapSize: 0.4, transparent: true, opacity: 0.7 }));
+    sightline.frustumCulled = drop.frustumCulled = false;
+    group.add(bead, sightline, drop);
+    let label: THREE.Sprite | null = null;
+    let labelText = '';
+    const writeLine = (line: THREE.Line, a: THREE.Vector3, b: THREE.Vector3) => {
+      const positions = line.geometry.getAttribute('position') as THREE.BufferAttribute;
+      positions.setXYZ(0, a.x, a.y, a.z); positions.setXYZ(1, b.x, b.y, b.z);
+      positions.needsUpdate = true;
+    };
+    updateInstantRef.current = (date: Date) => {
+      const position = getSolarPosition(selectedCity.lat, selectedCity.lng, date);
+      const elevation = position.elevation * Math.PI / 180, azimuth = position.azimuth * Math.PI / 180;
+      const horizontal = pObs.clone().addScaledVector(north, Math.cos(elevation) * Math.cos(azimuth) * R_DOME)
+        .addScaledVector(east, Math.cos(elevation) * Math.sin(azimuth) * R_DOME);
+      const sun = horizontal.clone().addScaledVector(up, Math.sin(elevation) * R_DOME);
+      bead.position.copy(sun);
+      writeLine(sightline, pObs, sun); writeLine(drop, sun, horizontal); drop.computeLineDistances();
+      const text = `☉ Sun Alt: ${position.elevation.toFixed(1)}° (${position.phaseLabel})`;
+      if (text !== labelText) {
+        if (label) { group.remove(label); label.material.map?.dispose(); label.material.dispose(); }
+        label = createLabelSprite(text, position.elevation >= 0 ? '#fde047' : '#818cf8', 'rgba(15, 23, 42, 0.9)');
+        labelText = text; group.add(label);
+      }
+      label!.position.copy(sun).addScaledVector(up, 2.2);
+    };
+    return () => { updateInstantRef.current = null; };
+  }, [selectedCity, layers.showSunTrajectory]);
 
-    // Sightline Ray from Observer to Current Sun
-    const sightlineGeo = new THREE.BufferGeometry().setFromPoints([pObs, curSunPos]);
-    const sightlineMat = new THREE.LineBasicMaterial({ color: 0xffea00, linewidth: 2, transparent: true, opacity: 0.85 });
-    group.add(new THREE.Line(sightlineGeo, sightlineMat));
-
-    // Projection on Horizon Plane
-    const horizProjection = pObs.clone()
-      .addScaledVector(north, Math.cos(curElRad) * Math.cos(curAzRad) * R_DOME)
-      .addScaledVector(east, Math.cos(curElRad) * Math.sin(curAzRad) * R_DOME);
-
-    const altDropGeo = new THREE.BufferGeometry().setFromPoints([curSunPos, horizProjection]);
-    const altDropMat = new THREE.LineDashedMaterial({ color: 0x38bdf8, dashSize: 0.6, gapSize: 0.4, transparent: true, opacity: 0.7 });
-    const altDropLine = new THREE.Line(altDropGeo, altDropMat);
-    altDropLine.computeLineDistances();
-    group.add(altDropLine);
-
-    // Current Sun Altitude Label
-    const curSunLabel = createLabelSprite(
-      `☉ Sun Alt: ${curPos.elevation.toFixed(1)}° (${curPos.phaseLabel})`,
-      curPos.elevation >= 0 ? '#fde047' : '#818cf8',
-      'rgba(15, 23, 42, 0.9)'
-    );
-    curSunLabel.position.copy(curSunPos.clone().addScaledVector(up, 2.2));
-    group.add(curSunLabel);
-
-  }, [selectedCity, currentDate, layers.showSunTrajectory, layers.showSeasonalPaths]);
+  useEffect(() => { updateInstantRef.current?.(currentDate); }, [currentDate, selectedCity, layers.showSunTrajectory]);
 
   // Update Layer Toggles
   useEffect(() => {

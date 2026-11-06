@@ -15,7 +15,7 @@ Explore sunlight around the world with an interactive 3D globe, a 2D daylight ma
 - **UTC and local clocks:** the header and city comparison show the simulation instant in your device’s time zone beneath UTC, with matching typography and the UTC offset. Each comparison card also shows that city’s clock and date.
 - **Helix globe tour:** an optional scroll/swipe camera tour with vortex transitions and five latitude stops; normal atlas gestures stay unchanged.
 - **Navigation deck:** time-step shortcuts, city locking, magnetic reticle snapping, Fibonacci city clusters, and optional ambient terminator drift. Open **Navigation** on desktop; the Navigation menu is not shown on mobile.
-- **Time simulation:** scrub the UTC timeline, change dates, adjust playback speed, or return to the present.
+- **Time simulation:** scrub the UTC timeline, change dates, adjust playback speed, or return to the present. Manual time changes pause playback and leave live-follow mode; **Now** restores it, including clock recovery after backgrounding. All time controls stay within 1900–2100, and playback stops at the upper limit.
 - **Coordinate deep links:** open a location and its trajectory inspector with `?lat=...&lng=...&date=...`; a second coordinate link is available in **Share view**.
 - **Shareable views:** copy a snapshot link with the location, UTC date/time, map mode, and layer settings. Shared views open paused, including custom observation points.
 - **Annual daylight calendar:** inspect every day of a year, compare longest/shortest daylight duration, see polar day/night counts, and click a date to jump to it.
@@ -206,6 +206,7 @@ https://mytest.ccwu.cc/?lat=51.5074&lng=-0.1278&date=2026-06-21T12%3A00%3A00Z
 
 - Globe and ground-sky canvas pixel ratios are capped at **2**; automated headless WebGL checks use 1.
 - The globe render loop stops when the document is hidden, its viewport is offscreen/hidden, or a planner/inspector dialog covers it. It resumes with a fresh frame clock and cleans up observers/listeners on unmount. Switching to the 2D map unmounts the globe renderer.
+- Seasonal trajectory geometry and labels are reused for the selected city/year; daily paths rebuild only when the city or UTC date changes. The moving Sun updates its existing bead and line geometry, refreshing its label texture only when the displayed text changes. Layer toggles rebuild the affected annotations.
 - Playback schedules no animation loop when paused. Hidden tabs suspend playback and resume without catching up hidden elapsed time; live-clock updates also skip hidden tabs.
 - The system’s **prefers-reduced-motion** setting disables globe auto-rotation, orbital damping, cloud drift, magnetic snapping, ambient idle drift, and tour spins/vortex effects. City-cluster placement is immediate under this preference. Automatic rotation is unavailable in the mobile layer controls while this preference is active. Explicitly starting playback advances simulation time once per second instead of continuously animating it. Changing the motion preference pauses playback.
 
@@ -243,5 +244,4 @@ This branch’s history has been sanitized to remove the old Cloudflare account 
 
 ## Known validation gaps
 
-- Live time can stop following the clock after the app or tab has been hidden for over a minute; returning to **Now** resynchronizes it. This was reproduced in the latest code review and remains unresolved.
 - The latest reviewed iOS run compiled both native builds and passed the bundled UI checks, but its iPad simulator launch timed out. An earlier simulator run passed. Device compilation and static binary inspection do not replace testing on physical devices or a successful current simulator run.

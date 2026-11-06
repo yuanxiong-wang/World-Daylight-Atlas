@@ -79,8 +79,13 @@ test('a small drag gently snaps the reticle without changing the city', async ({
   const globe = page.getByTestId('globe-viewport');
   await expect(globe.locator('canvas')).toBeVisible();
   await page.mouse.move(640, 360); await page.mouse.down(); await page.mouse.move(640, 375, { steps: 5 }); await page.mouse.up();
-  await expect(globe).toHaveAttribute('data-motion', 'snapping');
+  // A slow CI frame can finish the 900 ms animation before an assertion polls it.
+  // Verify the settled camera's actual ray/Earth intersection instead.
   await expect(page.getByTestId('globe-reticle')).toContainText('0°E meridian');
+  await expect.poll(async () => {
+    const value = await globe.getAttribute('data-snap-longitude');
+    return value === null ? Infinity : Math.abs(Number(value));
+  }).toBeLessThan(0.05);
   await expect(globe).toHaveAttribute('data-motion', 'manual');
   await expect(page.getByTestId('desktop-city-panel').getByRole('heading', { name: 'London', exact: true })).toBeVisible();
 });
